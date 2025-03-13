@@ -158,6 +158,15 @@ function OperatorDashboard({ operatorName, operatorNumber, operatorId = '' }) {
     };
   }, [operatorName, operatorNumber, operatorId]);
   
+  useEffect(() => {
+    if (selectedClient?.id && selectedClient?.roomId) {
+      socket.emit('get-chat-history', {
+        clientId: selectedClient.id,
+        roomId: selectedClient.roomId
+      });
+    }
+  }, [selectedClient?.id, selectedClient?.roomId]);
+  
   const handleInputChange = (e) => {
     setInputMessage(e.target.value);
     
@@ -283,124 +292,72 @@ function OperatorDashboard({ operatorName, operatorNumber, operatorId = '' }) {
   };
   
   return (
-    <div className="operator-container">
-      <div className="sidebar">
-        <div className="operator-info">
-          <div className="operator-avatar">
-            {operatorName.charAt(0).toUpperCase()}
-          </div>
-          <div className="operator-details">
-            <h3>{operatorName}</h3>
-            <span className="operator-number">{operatorNumber}</span>
-            <span className="status online">Online</span>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar */}
+      <div className="w-80 bg-white border-r flex flex-col">
+        {/* Operator Info */}
+        <div className="p-4 border-b">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-r from-secondary-500 to-secondary-600 flex items-center justify-center text-white font-medium">
+              {operatorName?.[0]?.toUpperCase()}
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-800">{operatorName}</h3>
+              <p className="text-sm text-gray-500">Online</p>
+            </div>
           </div>
         </div>
-        
-        <div className="search-container">
-          <FiSearch className="search-icon" />
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Search clients..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        
-        <div className="client-lists">
-          {filteredPendingClients.length > 0 && (
-            <div className="client-section">
-              <div className="section-header">
-                <FiClock />
-                <span>Waiting ({filteredPendingClients.length})</span>
-              </div>
-              
-              {filteredPendingClients.map(client => (
-                <div 
-                  key={client.id || client.roomId} 
-                  className="client-item pending"
-                  onClick={() => handleAcceptClient(client)}
-                >
-                  <div className="client-avatar">
-                    {client.name.charAt(0).toUpperCase()}
+
+        {/* Client List */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="space-y-2">
+            {filteredPendingClients.map((client) => (
+              <div
+                key={client.id}
+                onClick={() => handleAcceptClient(client)}
+                className={`p-3 rounded-lg cursor-pointer transition-all ${
+                  selectedClient?.id === client.id
+                    ? 'bg-primary-50 border-l-4 border-primary-500'
+                    : 'hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
+                    {client.name[0].toUpperCase()}
                   </div>
-                  <div className="client-info">
-                    <div className="client-name">{client.name}</div>
-                    <div className="client-status">Waiting for assistance</div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-800">{client.name}</h4>
+                    <p className="text-sm text-gray-500">Waiting for assistance</p>
                   </div>
                   <div className="accept-badge">
                     <FiAlertCircle />
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-          
-          {filteredActiveClients.length > 0 && (
-            <div className="client-section">
-              <div className="section-header">
-                <FiUsers />
-                <span>Active Clients ({filteredActiveClients.length})</span>
               </div>
-              
-              {filteredActiveClients.map(client => {
-                const clientKey = getClientKey(client);
-                const hasUnread = unreadMessages[clientKey] > 0;
-                
-                return (
-                  <div 
-                    key={clientKey} 
-                    className={`client-item ${selectedClient && getClientKey(selectedClient) === clientKey ? 'selected' : ''}`}
-                    onClick={() => handleClientSelect(client)}
-                  >
-                    <div className="client-avatar">
-                      {client.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="client-info">
-                      <div className="client-name">{client.name}</div>
-                      <div className="client-status">
-                        {clientTyping[clientKey] ? 'Typing...' : 'Online'}
-                      </div>
-                    </div>
-                    {hasUnread && (
-                      <div className="unread-badge">
-                        {unreadMessages[clientKey]}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          
-          {filteredActiveClients.length === 0 && filteredPendingClients.length === 0 && (
-            <div className="no-clients-message">
-              <FiUser />
-              <p>No clients available</p>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       </div>
-      
-      <div className="chat-area">
+
+      {/* Chat Area */}
+      <div className="flex-1 flex flex-col">
         {selectedClient ? (
           <>
-            <div className="chat-header">
-              <div className="client-info">
-                <div className="client-avatar">
-                  {selectedClient.name.charAt(0).toUpperCase()}
+            {/* Chat Header */}
+            <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
+                  {selectedClient.name[0].toUpperCase()}
                 </div>
-                <div className="client-details">
-                  <h3>{selectedClient.name}</h3>
-                  <span className="client-number">{selectedClient.number}</span>
-                  <span className="status online">
-                    {clientTyping[getClientKey(selectedClient)] ? 'Typing...' : 'Online'}
-                  </span>
+                <div>
+                  <h2 className="font-semibold text-gray-800">{selectedClient.name}</h2>
+                  <p className="text-sm text-gray-500">{selectedClient.number}</p>
                 </div>
               </div>
             </div>
-            
-            <div className="messages-container" ref={chatContainerRef}>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               {groupMessagesByDate(getClientKey(selectedClient)).map((group, groupIndex) => (
                 <div key={groupIndex} className="message-group">
                   <div className="date-divider">
@@ -414,87 +371,86 @@ function OperatorDashboard({ operatorName, operatorNumber, operatorId = '' }) {
                     return (
                       <div 
                         key={message.messageId || messageIndex} 
-                        className={`message-wrapper ${isSystem ? 'system' : isOperator ? 'operator' : 'client'}`}
+                        className={`flex ${isSystem ? 'justify-end' : isOperator ? 'justify-end' : 'justify-start'}`}
                       >
-                        {isSystem ? (
-                          <div className="system-message">
-                            {message.text}
-                          </div>
-                        ) : (
-                          <div className={`message ${isOperator ? 'operator-message' : 'client-message'}`}>
-                            {!isOperator && (
-                              <div className="avatar client-avatar">
-                                {selectedClient.name.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            
-                            <div className="message-bubble">
+                        <div
+                          className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+                            isSystem ? 'bg-gradient-to-r from-secondary-500 to-secondary-600 text-white' : isOperator ? 'bg-gradient-to-r from-secondary-500 to-secondary-600 text-white' : 'bg-white border border-gray-200 text-gray-800'
+                          }`}
+                        >
+                          {isSystem ? (
+                            <div className="system-message">
+                              {message.text}
+                            </div>
+                          ) : (
+                            <div className={`message ${isOperator ? 'operator-message' : 'client-message'}`}>
                               {!isOperator && (
-                                <div className="message-sender">
-                                  {selectedClient.name}
+                                <div className="avatar client-avatar">
+                                  {selectedClient.name.charAt(0).toUpperCase()}
                                 </div>
                               )}
                               
-                              <div className="message-text">
-                                {message.text}
+                              <div className="message-bubble">
+                                {!isOperator && (
+                                  <div className="message-sender">
+                                    {selectedClient.name}
+                                  </div>
+                                )}
+                                
+                                <div className="message-text">
+                                  {message.text}
+                                </div>
+                                
+                                <div className="message-timestamp">
+                                  {formatTime(message.timestamp)}
+                                </div>
                               </div>
                               
-                              <div className="message-timestamp">
-                                {formatTime(message.timestamp)}
-                              </div>
+                              {isOperator && (
+                                <div className="avatar operator-avatar">
+                                  {operatorName.charAt(0).toUpperCase()}
+                                </div>
+                              )}
                             </div>
-                            
-                            {isOperator && (
-                              <div className="avatar operator-avatar">
-                                {operatorName.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               ))}
-              
-              {clientTyping[getClientKey(selectedClient)] && (
-                <div className="typing-indicator">
-                  <div className="typing-bubble">
-                    <span className="dot"></span>
-                    <span className="dot"></span>
-                    <span className="dot"></span>
-                  </div>
-                  <div className="typing-text">Client is typing...</div>
-                </div>
-              )}
-              
-              <div ref={messagesEndRef} />
             </div>
-            
-            <form onSubmit={handleSendMessage} className="message-input-form">
-              <input
-                type="text"
-                value={inputMessage}
-                onChange={handleInputChange}
-                placeholder="Type a message..."
-                className="message-input"
-              />
-              <button 
-                type="submit" 
-                className={`send-button ${inputMessage.trim() ? 'active' : ''}`}
-                disabled={!inputMessage.trim()}
-              >
-                <FiSend />
-              </button>
-            </form>
+
+            {/* Input */}
+            <div className="bg-white border-t p-4">
+              <form onSubmit={handleSendMessage} className="flex space-x-4">
+                <input
+                  type="text"
+                  value={inputMessage}
+                  onChange={handleInputChange}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-secondary-400 focus:border-transparent transition-all outline-none"
+                  placeholder="Type your message..."
+                />
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-gradient-to-r from-secondary-500 to-secondary-600 hover:from-secondary-600 hover:to-secondary-700 text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+                >
+                  Send
+                </button>
+              </form>
+            </div>
           </>
         ) : (
-          <div className="no-client-selected">
-            <div className="no-client-icon">
-              <FiMessageSquare />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900">No chat selected</h3>
+              <p className="mt-1 text-sm text-gray-500">Select a conversation to start messaging</p>
             </div>
-            <h2>Select a client to start chatting</h2>
-            <p>Or accept a client from the waiting queue</p>
           </div>
         )}
       </div>

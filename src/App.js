@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import ClientLogin from './components/ClientLogin';
 import ClientChat from './components/ClientChat';
@@ -92,18 +92,41 @@ function ClientLoginWrapper() {
 
 // Wrapper component to handle client chat authentication
 function ClientChatWrapper() {
-  // Check if credentials exist
-  const clientId = sessionStorage.getItem('clientId');
-  const clientName = sessionStorage.getItem('clientName');
-  const clientNumber = sessionStorage.getItem('clientNumber');
-  
-  // If no credentials, redirect to login
-  if (!clientId || !clientName || !clientNumber) {
-    return <Navigate to="/client/login" replace />;
+  const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+
+  const checkAuth = useCallback(() => {
+    const clientName = sessionStorage.getItem('clientName');
+    const clientNumber = sessionStorage.getItem('clientNumber');
+    
+    if (!clientName || !clientNumber) {
+      navigate('/client/login', { replace: true });
+      setIsAuthenticated(false);
+    } else {
+      setIsAuthenticated(true);
+    }
+    setIsChecking(false);
+  }, [navigate]);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  if (isChecking) {
+    return <div>Loading...</div>; // or a spinner component
   }
-  
-  // Pass credentials to chat component
-  return <ClientChat userName={clientName} userNumber={clientNumber} />;
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <ClientChat 
+      clientName={sessionStorage.getItem('clientName')}
+      clientNumber={sessionStorage.getItem('clientNumber')}
+    />
+  );
 }
 
 // Wrapper component to handle operator login authentication

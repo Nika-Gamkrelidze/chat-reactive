@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   initClientSocket, 
   setClientMessageHandler, 
@@ -13,7 +14,7 @@ import {
 import { FiSend, FiUser } from 'react-icons/fi';
 import './ClientChat.css';
 
-function ClientChat({ userName, userNumber }) {
+function ClientChat() {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [hasOperator, setHasOperator] = useState(false);
@@ -24,13 +25,16 @@ function ClientChat({ userName, userNumber }) {
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const socketInitializedRef = useRef(false);
+  const navigate = useNavigate();
+  const clientName = sessionStorage.getItem('clientName');
+  const clientNumber = sessionStorage.getItem('clientNumber');
   
   useEffect(() => {
-    // Only connect if we have a username and number and haven't initialized yet
-    if (!userName || !userNumber || socketInitializedRef.current) {
+    if (!clientName || !clientNumber) {
+      navigate('/client/login');
       return;
     }
-    
+
     socketInitializedRef.current = true;
     
     // Define message handler function
@@ -72,7 +76,7 @@ function ClientChat({ userName, userNumber }) {
     
     // If no stored credentials or reconnection failed, initialize with provided credentials
     if (!socket) {
-      socket = initClientSocket(userName, userNumber, handleNewMessage, handleSessionUpdate);
+      socket = initClientSocket(clientName, clientNumber, handleNewMessage, handleSessionUpdate);
     }
     
     if (socket) {
@@ -102,9 +106,9 @@ function ClientChat({ userName, userNumber }) {
     
     // Clean up on unmount
     return () => {
-      // Nothing to clean up here as we want to keep the socket connection
+      socket.disconnect();
     };
-  }, [userName, userNumber]);
+  }, [clientName, clientNumber, navigate]);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -154,61 +158,95 @@ function ClientChat({ userName, userNumber }) {
       // You might want to show an error to the user here
     }
   };
+
+  const handleLogout = () => {
+    // Clear session storage
+    sessionStorage.removeItem('clientName');
+    sessionStorage.removeItem('clientNumber');
+    
+    // Disconnect socket if needed
+    const socket = getClientSocket();
+    if (socket) {
+      socket.disconnect();
+    }
+    
+    // Navigate to login
+    navigate('/client/login');
+  };
   
   return (
-    <div className="chat-container">
-      <div className="chat-header">
-        <div className="chat-title">
-          <FiUser className="user-icon" />
-          <h2>Chat with Support</h2>
-        </div>
-        {hasOperator && operatorInfo && (
-          <div className="operator-info">
-            <span>Operator: {operatorInfo.name}</span>
-          </div>
-        )}
-      </div>
-      
-      <div className="messages-container">
-        {messages.map((msg, index) => (
-          <div 
-            key={msg.messageId || index} 
-            className={`message ${msg.isClient || msg.senderId === clientStorage.client?.id ? 'client-message' : 'operator-message'}`}
-          >
-            <div className="message-content">
-              <p>{msg.text}</p>
-              <span className="message-time">
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto h-screen flex flex-col">
+        {/* Header */}
+        <div className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-r from-primary-500 to-primary-600 flex items-center justify-center text-white font-medium">
+              {clientName?.[0]?.toUpperCase()}
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-800">{clientName}</h2>
+              <p className="text-sm text-gray-500">{clientNumber}</p>
             </div>
           </div>
-        ))}
-        
-        {operatorTyping && (
-          <div className="typing-indicator">
-            <span>Operator is typing...</span>
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4" ref={messagesEndRef}>
+          {messages.map((msg, index) => (
+            <div
+              key={index}
+              className={`flex ${msg.sender === 'client' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+                  msg.sender === 'client'
+                    ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white'
+                    : 'bg-white border border-gray-200 text-gray-800'
+                }`}
+              >
+                <p className="text-sm">{msg.text}</p>
+                <p className={`text-xs mt-1 ${
+                  msg.sender === 'client' ? 'text-primary-100' : 'text-gray-400'
+                }`}>
+                  {new Date(msg.timestamp).toLocaleTimeString()}
+                </p>
+              </div>
+            </div>
+          ))}
+          {isTyping && (
+            <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></div>
+            </div>
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="bg-white border-t p-4">
+          <form onSubmit={handleSendMessage} className="flex space-x-4">
+            <input
+              type="text"
+              value={inputMessage}
+              onChange={handleInputChange}
+              className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none"
+              placeholder="Type your message..."
+            />
+            <button
+              type="submit"
+              className="px-6 py-2 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+            >
+              Send
+            </button>
+          </form>
+        </div>
       </div>
-      
-      <form className="message-input-container" onSubmit={handleSendMessage}>
-        <input
-          type="text"
-          value={inputMessage}
-          onChange={handleInputChange}
-          placeholder="Type your message here..."
-          className="message-input"
-        />
-        <button 
-          type="submit" 
-          className="send-button"
-          disabled={!inputMessage.trim()}
-        >
-          <FiSend />
-        </button>
-      </form>
     </div>
   );
 }

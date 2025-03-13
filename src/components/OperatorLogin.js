@@ -59,38 +59,55 @@ function OperatorLogin() {
   };
 
   return (
-    <div className="operator-login-container">
-      <div className="login-form-container">
-        <h2>Operator Login</h2>
-        <form onSubmit={handleSubmit} className="login-form">
-          {error && <div className="error-message">{error}</div>}
+    <div className="min-h-screen bg-gradient-to-br from-secondary-50 to-primary-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-soft p-8">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Operator Login</h2>
+          <p className="text-gray-500">Access your support dashboard</p>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
+              {error}
+            </div>
+          )}
           
-          <div className="form-group">
-            <label htmlFor="name">Name</label>
+          <div className="space-y-2">
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+              Username
+            </label>
             <input
               type="text"
-              id="name"
+              id="username"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your name"
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-secondary-400 focus:border-transparent transition-all outline-none"
+              placeholder="Enter your username"
               required
             />
           </div>
           
-          <div className="form-group">
-            <label htmlFor="number">Phone Number</label>
+          <div className="space-y-2">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              Password
+            </label>
             <input
               type="text"
-              id="number"
+              id="password"
               value={number}
               onChange={(e) => setNumber(e.target.value)}
-              placeholder="Enter your phone number"
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-secondary-400 focus:border-transparent transition-all outline-none"
+              placeholder="Enter your password"
               required
             />
           </div>
           
-          <button type="submit" className="login-button">
-            Login as Operator
+          <button
+            type="submit"
+            className="w-full bg-gradient-to-r from-secondary-500 to-secondary-600 hover:from-secondary-600 hover:to-secondary-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm"
+          >
+            Login
           </button>
         </form>
       </div>
