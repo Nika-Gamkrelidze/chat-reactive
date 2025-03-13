@@ -1,11 +1,37 @@
+// Environment configuration
 const config = {
-  socketUrl: process.env.REACT_APP_SOCKET_URL || 'https://chatnew.communiq.ge',
-  socketNamespace: process.env.REACT_APP_SOCKET_NAMESPACE || '/nikoloz',
-  socketTransport: process.env.REACT_APP_SOCKET_TRANSPORT || 'websocket',
+  // Server connection settings
+  server: {
+    protocol: 'https',
+    host: 'chat.communiq.ge',
+    port: '', // Empty string for default port
+    namespace: 'namespace1',
+    get url() {
+      return `${this.protocol}://${this.host}${this.port ? ':' + this.port : ''}`;
+    },
+    get namespaceUrl() {
+      return `${this.url}/${this.namespace}`;
+    }
+  },
   
-  // You can add more environment variables here as needed
-  isDevelopment: process.env.NODE_ENV === 'development',
-  isProduction: process.env.NODE_ENV === 'production',
+  // Application settings
+  app: {
+    name: 'Chat Application',
+    version: '1.0.0',
+    debug: true
+  }
 };
+
+// Override with localStorage settings if they exist
+if (typeof window !== 'undefined' && window.localStorage) {
+  const savedHost = localStorage.getItem('serverHost');
+  const savedPort = localStorage.getItem('serverPort');
+  const savedNamespace = localStorage.getItem('serverNamespace');
+  
+  // Only apply saved settings if they exist and are not empty
+  if (savedHost && savedHost.trim()) config.server.host = savedHost;
+  if (savedPort && savedPort.trim()) config.server.port = savedPort;
+  if (savedNamespace && savedNamespace.trim()) config.server.namespace = savedNamespace;
+}
 
 export default config; 

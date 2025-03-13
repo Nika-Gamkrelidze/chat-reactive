@@ -1,180 +1,211 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
-  getSocket, 
-  disconnectSocket, 
+  initSocket, 
+  setMessageHandler, 
   sendMessage, 
-  sendTypingStatus,
-  requestUserList
+  getSocket, 
+  sendTypingStatus, 
+  getStoredMessages,
+  chatStorage 
 } from '../services/socket';
+import { FiSend, FiUser, FiMessageSquare } from 'react-icons/fi';
+import './Chat.css';
 
-const Chat = () => {
+function ChatComponent({ userName = '', userNumber = '' }) {
   const [messages, setMessages] = useState([]);
-  const [messageInput, setMessageInput] = useState('');
-  const [users, setUsers] = useState([]);
-  const [typingUsers, setTypingUsers] = useState([]);
-  const [error, setError] = useState('');
-  const socket = getSocket();
-  const navigate = useNavigate();
+  const [inputMessage, setInputMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [operatorTyping, setOperatorTyping] = useState(false);
+  const [hasOperator, setHasOperator] = useState(chatStorage.hasOperator);
   const messagesEndRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
-
-  useEffect(() => {
-    // Check if user is logged in
-    const userId = localStorage.getItem('userId');
-    if (!userId || !socket) {
-      navigate('/');
-      return;
-    }
-
-    // Request initial user list
-    requestUserList();
-
-    // Listen for new messages
-    socket.on('message', (message) => {
-      console.log('New message received:', message);
-      setMessages((prevMessages) => [...prevMessages, message]);
-    });
-
-    // Listen for users list updates
-    socket.on('users', (usersList) => {
-      console.log('Users list updated:', usersList);
-      setUsers(usersList);
-    });
-
-    // Listen for typing indicators
-    socket.on('typing', ({ userId, name, isTyping }) => {
-      if (isTyping) {
-        setTypingUsers(prev => [...prev.filter(user => user.userId !== userId), { userId, name }]);
-      } else {
-        setTypingUsers(prev => prev.filter(user => user.userId !== userId));
-      }
-    });
-
-    // Listen for errors
-    socket.on('error', (errorMessage) => {
-      console.error('Server error:', errorMessage);
-      setError(errorMessage);
-      
-      // Clear error after 5 seconds
-      setTimeout(() => setError(''), 5000);
-    });
-
-    // Cleanup on component unmount
-    return () => {
-      socket.off('message');
-      socket.off('users');
-      socket.off('typing');
-      socket.off('error');
-      
-      // Clear any pending typing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    };
-  }, [navigate, socket]);
-
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
+  const messagesContainerRef = useRef(null);
+  
+  // Scroll to bottom of messages
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+  
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
-
+  
+  useEffect(() => {
+    // Load stored messages first
+    const storedMessages = getStoredMessages();
+    if (storedMessages && storedMessages.length > 0) {
+      setMessages(storedMessages);
+    }
+    
+    // Initialize socket if not already done
+    const socket = getSocket() || initSocket(userName, userNumber, null, handleNewMessage);
+    
+    // Set up message handler
+    function handleNewMessage(message) {
+      console.log('New message received in component:', message);
+      setMessages(prevMessages => {
+        // Check if message already exists in the array
+        const exists = prevMessages.some(m => m.messageId === message.messageId);
+        if (exists) return prevMessages;
+        return [...prevMessages, message];
+      });
+    }
+    
+    setMessageHandler(handleNewMessage);
+    
+    // Handle typing indicator from operator
+    socket.on('typing', (isTyping) => {
+      setOperatorTyping(isTyping);
+    });
+    
+    // Handle operator assignment
+    socket.on('operator-assigned', () => {
+      setHasOperator(true);
+    });
+    
+    // Handle operator unassignment
+    socket.on('operator-unassigned', () => {
+      setHasOperator(false);
+    });
+    
+    // Clean up on unmount
+    return () => {
+      setMessageHandler(null);
+      socket.off('typing');
+      socket.off('operator-assigned');
+      socket.off('operator-unassigned');
+    };
+  }, [userName, userNumber]);
+  
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!messageInput.trim()) return;
-
-    const success = sendMessage(messageInput);
-    
-    if (success) {
-      // Clear typing indicator when sending a message
+    if (inputMessage.trim()) {
+      sendMessage(inputMessage);
+      setInputMessage('');
+      setIsTyping(false);
       sendTypingStatus(false);
-      setMessageInput('');
-    } else {
-      setError('Failed to send message. Please check your connection.');
     }
   };
-
+  
   const handleInputChange = (e) => {
-    setMessageInput(e.target.value);
+    const value = e.target.value;
+    setInputMessage(value);
     
-    // Send typing indicator
-    sendTypingStatus(true);
-    
-    // Clear previous timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
+    // Handle typing indicator
+    const isCurrentlyTyping = value.length > 0;
+    if (isCurrentlyTyping !== isTyping) {
+      setIsTyping(isCurrentlyTyping);
+      sendTypingStatus(isCurrentlyTyping);
     }
-    
-    // Set timeout to stop typing indicator after 2 seconds of inactivity
-    typingTimeoutRef.current = setTimeout(() => {
-      sendTypingStatus(false);
-    }, 2000);
   };
-
-  const handleLogout = () => {
-    localStorage.removeItem('userId');
-    disconnectSocket();
-    navigate('/');
-  };
-
+  
+  // Group messages by date
+  const groupedMessages = messages.reduce((groups, message) => {
+    const date = new Date(message.timestamp).toLocaleDateString();
+    if (!groups[date]) {
+      groups[date] = [];
+    }
+    groups[date].push(message);
+    return groups;
+  }, {});
+  
+  // Get display name for user avatar
+  const displayName = userName || (chatStorage.client?.name || '');
+  const userInitial = displayName ? displayName.charAt(0).toUpperCase() : '?';
+  
   return (
     <div className="chat-container">
       <div className="chat-header">
-        <h1>Chat Room</h1>
-        <button onClick={handleLogout} className="logout-btn">Logout</button>
+        <div className="chat-title">
+          <FiMessageSquare className="chat-icon" />
+          <h2>Support Chat</h2>
+        </div>
+        <div className="user-info">
+          <FiUser className="user-icon" />
+          <span>{displayName || 'Guest'}</span>
+        </div>
       </div>
       
-      {error && <div className="error-banner">{error}</div>}
-      
-      <div className="chat-main">
-        <div className="users-list">
-          <h2>Online Users</h2>
-          <ul>
-            {users.map((user) => (
-              <li key={user.userId} className={typingUsers.some(u => u.userId === user.userId) ? 'typing' : ''}>
-                {user.name} {typingUsers.some(u => u.userId === user.userId) && <span className="typing-indicator">typing...</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="messages-container">
-          <div className="messages">
-            {messages.map((msg, index) => (
-              <div 
-                key={index} 
-                className={`message ${msg.userId === localStorage.getItem('userId') ? 'own-message' : ''}`}
-              >
-                <div className="message-sender">{msg.name}</div>
-                <div className="message-text">{msg.text}</div>
-                <div className="message-time">
-                  {new Date(msg.timestamp || msg.time).toLocaleTimeString()}
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-          
-          {typingUsers.length > 0 && (
-            <div className="typing-status">
-              {typingUsers.length === 1 
-                ? `${typingUsers[0].name} is typing...` 
-                : `${typingUsers.length} people are typing...`}
+      <div className="messages-container" ref={messagesContainerRef}>
+        {Object.entries(groupedMessages).map(([date, dateMessages]) => (
+          <div key={date} className="message-group">
+            <div className="date-divider">
+              <span>{date}</span>
             </div>
-          )}
-          
-          <form onSubmit={handleSendMessage} className="message-form">
-            <input
-              type="text"
-              value={messageInput}
-              onChange={handleInputChange}
-              placeholder="Type a message..."
-            />
-            <button type="submit">Send</button>
-          </form>
-        </div>
+            
+            {dateMessages.map((message, index) => {
+              const isSystem = message.type === 'system';
+              // Check if the message was sent by the current user
+              const isCurrentUser = message.senderId === chatStorage.client?.id;
+              // Check if the message was sent by an operator
+              const isOperator = message.sentByOperator === true;
+              
+              return (
+                <div 
+                  key={message.messageId || index} 
+                  className={`message-wrapper ${isSystem ? 'system' : isCurrentUser ? 'user' : isOperator ? 'operator' : 'other'}`}
+                >
+                  <div className={`message ${isSystem ? 'system-message' : isCurrentUser ? 'user-message' : isOperator ? 'operator-message' : 'other-message'}`}>
+                    {isOperator && <div className="avatar operator-avatar">OP</div>}
+                    {isCurrentUser && <div className="avatar user-avatar">{userInitial}</div>}
+                    {!isSystem && !isCurrentUser && !isOperator && <div className="avatar other-avatar">?</div>}
+                    
+                    <div className="message-bubble">
+                      {isSystem && <div className="message-sender">System</div>}
+                      {isOperator && <div className="message-sender">Support Agent</div>}
+                      {!isSystem && !isCurrentUser && !isOperator && <div className="message-sender">Other</div>}
+                      
+                      <div className="message-text">{message.text}</div>
+                      
+                      <div className="message-timestamp">
+                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        
+        {!hasOperator && (
+          <div className="queue-status">
+            <div className="queue-icon">🔄</div>
+            <div className="queue-text">Waiting for an available support agent...</div>
+          </div>
+        )}
+        
+        {operatorTyping && (
+          <div className="typing-indicator">
+            <div className="typing-bubble">
+              <span className="dot"></span>
+              <span className="dot"></span>
+              <span className="dot"></span>
+            </div>
+            <div className="typing-text">Support agent is typing...</div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
       </div>
+      
+      <form onSubmit={handleSendMessage} className="message-input-form">
+        <input
+          type="text"
+          value={inputMessage}
+          onChange={handleInputChange}
+          placeholder="Type a message..."
+          className="message-input"
+        />
+        <button 
+          type="submit" 
+          className={`send-button ${inputMessage.trim() ? 'active' : ''}`}
+          disabled={!inputMessage.trim()}
+        >
+          <FiSend />
+        </button>
+      </form>
     </div>
   );
-};
+}
 
-export default Chat; 
+export default ChatComponent;
