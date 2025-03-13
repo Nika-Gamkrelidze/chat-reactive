@@ -39,21 +39,41 @@ export const clientStorage = {
   
   // Add a message to storage
   addMessage: function(message) {
-    if (!message) return this;
-    
+    // Ensure message has all required fields
+    const processedMessage = {
+      messageId: message.messageId,
+      text: message.text,
+      timestamp: message.timestamp,
+      type: message.type || (message.senderId === 'system' ? 'system' : 'message'),
+      senderId: message.senderId,
+      receiverId: message.receiverId || 'all',
+      read: message.read || false,
+      readTimestamp: message.readTimestamp,
+      metadata: message.metadata || {},
+      roomId: message.roomId,
+      senderName: message.senderName
+    };
+
+    // Determine message type and add appropriate flags
+    if (message.senderId === 'system') {
+      processedMessage.isSystem = true;
+    } else if (message.senderId === this.client?.id) {
+      processedMessage.isClient = true;
+      processedMessage.senderName = this.client.name;
+    } else if (message.sentByOperator) {
+      processedMessage.isOperator = true;
+    }
+
     // Check if message already exists
-    const exists = this.messages.some(m => m.messageId === message.messageId);
-    
-    if (!exists) {
-      this.messages.push(message);
+    const existingIndex = this.messages.findIndex(msg => msg.messageId === message.messageId);
+    if (existingIndex === -1) {
+      this.messages.push(processedMessage);
       // Sort messages by timestamp
       this.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      
-      // Save to sessionStorage
       this.saveToStorage();
+      return true;
     }
-    
-    return this;
+    return false;
   },
   
   // Add multiple messages to storage
@@ -86,35 +106,29 @@ export const clientStorage = {
   // Save data to sessionStorage
   saveToStorage: function() {
     try {
-      sessionStorage.setItem('clientData', JSON.stringify(this.client));
-      sessionStorage.setItem('clientOperator', JSON.stringify(this.operator));
-      sessionStorage.setItem('clientRoomId', this.roomId);
-      sessionStorage.setItem('clientHasOperator', JSON.stringify(this.hasOperator));
-      sessionStorage.setItem('clientOperatorInfo', JSON.stringify(this.operatorInfo));
-      sessionStorage.setItem('clientMessages', JSON.stringify(this.messages));
+      localStorage.setItem('clientData', JSON.stringify(this.client));
+      localStorage.setItem('clientMessages', JSON.stringify(this.messages));
+      localStorage.setItem('clientRoomId', this.roomId);
+      localStorage.setItem('clientHasOperator', JSON.stringify(this.hasOperator));
     } catch (e) {
-      console.error('Error saving client data to sessionStorage:', e);
+      console.error('Error saving client data to localStorage:', e);
     }
   },
   
   // Load data from sessionStorage
   loadFromStorage: function() {
     try {
-      const client = sessionStorage.getItem('clientData');
-      const operator = sessionStorage.getItem('clientOperator');
-      const roomId = sessionStorage.getItem('clientRoomId');
-      const hasOperator = sessionStorage.getItem('clientHasOperator');
-      const operatorInfo = sessionStorage.getItem('clientOperatorInfo');
-      const messages = sessionStorage.getItem('clientMessages');
-      
-      if (client) this.client = JSON.parse(client);
-      if (operator) this.operator = JSON.parse(operator);
+      const clientData = localStorage.getItem('clientData');
+      const messages = localStorage.getItem('clientMessages');
+      const roomId = localStorage.getItem('clientRoomId');
+      const hasOperator = localStorage.getItem('clientHasOperator');
+
+      if (clientData) this.client = JSON.parse(clientData);
+      if (messages) this.messages = JSON.parse(messages);
       if (roomId) this.roomId = roomId;
       if (hasOperator) this.hasOperator = JSON.parse(hasOperator);
-      if (operatorInfo) this.operatorInfo = JSON.parse(operatorInfo);
-      if (messages) this.messages = JSON.parse(messages);
-    } catch (e) {
-      console.error('Error loading client data from sessionStorage:', e);
+    } catch (error) {
+      console.error('Error loading client storage:', error);
     }
     
     return this;
@@ -152,19 +166,62 @@ export const clientStorage = {
     this.messages = [];
     
     try {
-      sessionStorage.removeItem('clientData');
-      sessionStorage.removeItem('clientOperator');
-      sessionStorage.removeItem('clientRoomId');
-      sessionStorage.removeItem('clientHasOperator');
-      sessionStorage.removeItem('clientOperatorInfo');
-      sessionStorage.removeItem('clientMessages');
+      localStorage.removeItem('clientData');
+      localStorage.removeItem('clientMessages');
+      localStorage.removeItem('clientRoomId');
+      localStorage.removeItem('clientHasOperator');
+      sessionStorage.removeItem('clientId');
       sessionStorage.removeItem('clientName');
       sessionStorage.removeItem('clientNumber');
+      sessionStorage.removeItem('roomId');
     } catch (e) {
-      console.error('Error clearing client data from sessionStorage:', e);
+      console.error('Error clearing client data from localStorage:', e);
     }
     
     return this;
+  },
+
+  // Get system messages
+  getSystemMessages() {
+    return this.messages.filter(msg => msg.type === 'system');
+  },
+
+  // Get client messages
+  getClientMessages() {
+    return this.messages.filter(msg => msg.isClient);
+  },
+
+  // Get operator messages
+  getOperatorMessages() {
+    return this.messages.filter(msg => msg.isOperator);
+  },
+
+  // Get all messages for a specific room
+  getRoomMessages(roomId) {
+    return this.messages.filter(msg => msg.roomId === roomId);
+  },
+
+  // Get messages in a specific time range
+  getMessagesByTimeRange(startTime, endTime) {
+    return this.messages.filter(msg => {
+      const msgTime = new Date(msg.timestamp);
+      return msgTime >= startTime && msgTime <= endTime;
+    });
+  },
+
+  // Get unread messages
+  getUnreadMessages() {
+    return this.messages.filter(msg => !msg.read);
+  },
+
+  // Mark message as read
+  markMessageAsRead(messageId) {
+    const message = this.messages.find(msg => msg.messageId === messageId);
+    if (message) {
+      message.read = true;
+      message.readTimestamp = new Date().toISOString();
+      this.saveToStorage();
+    }
   }
 };
 
@@ -280,27 +337,44 @@ export const createClientSocket = (msgHandler = null, sessionHandler = null) => 
     });
     
     // Handle session reconnect (includes message history)
-    socket.on('session-reconnect', (sessionData) => {
-      console.log('Client session reconnected with data:', sessionData);
+    socket.on('session-reconnect', (data) => {
+      console.log('Client session reconnected:', data);
       
-      // Update chat storage with session data
-      clientStorage.updateFromSession(sessionData);
-      
-      // Add messages from session-reconnect to storage
-      if (sessionData.messages && Array.isArray(sessionData.messages)) {
-        clientStorage.addMessages(sessionData.messages);
+      if (data.client) {
+        // Store client data
+        sessionStorage.setItem('clientId', data.client.id);
         
-        // Process each message for the UI
-        if (messageHandler && typeof messageHandler === 'function') {
-          sessionData.messages.forEach(message => {
-            messageHandler(message);
+        // Update client data in storage
+        clientStorage.client = {
+          id: data.client.id,
+          name: data.client.name,
+          number: data.client.number,
+          socketId: socket.id,
+          status: data.client.status,
+          departmentId: data.client.departmentId
+        };
+        
+        // Store room information
+        if (data.roomId) {
+          clientStorage.roomId = data.roomId;
+          sessionStorage.setItem('roomId', data.roomId);
+        }
+        
+        // Store operator status
+        clientStorage.hasOperator = data.hasOperator || false;
+        
+        // Save to storage
+        clientStorage.saveToStorage();
+        
+        // Notify through session handler if provided
+        if (sessionHandler && typeof sessionHandler === 'function') {
+          sessionHandler({
+            type: 'session-reconnect',
+            client: data.client,
+            roomId: data.roomId,
+            hasOperator: data.hasOperator
           });
         }
-      }
-      
-      // Call the session handler if provided
-      if (sessionHandler && typeof sessionHandler === 'function') {
-        sessionHandler(sessionData);
       }
     });
 
@@ -378,6 +452,76 @@ export const createClientSocket = (msgHandler = null, sessionHandler = null) => 
         messageHandler({ type: 'typing', ...typingData });
       }
     });
+
+    // Inside createClientSocket function, update the message_history handler
+    socket.on('message_history', (data) => {
+      console.log('Received message history:', data);
+      
+      if (data.messages && Array.isArray(data.messages)) {
+        // Store the room ID
+        clientStorage.roomId = data.roomId;
+        sessionStorage.setItem('roomId', data.roomId);
+        
+        // Clear existing messages before adding history
+        clientStorage.messages = [];
+        
+        // Create a Map to track unique messages by messageId
+        const uniqueMessages = new Map();
+        
+        // Process each message
+        data.messages.forEach(message => {
+          // Skip if we already have this message ID (prevents duplicates)
+          if (uniqueMessages.has(message.messageId)) {
+            return;
+          }
+          
+          const processedMessage = {
+            messageId: message.messageId,
+            text: message.text,
+            timestamp: message.timestamp,
+            type: message.type || (message.senderId === 'system' ? 'system' : 'message'),
+            senderId: message.senderId,
+            receiverId: message.receiverId,
+            read: message.read || false,
+            readTimestamp: message.readTimestamp,
+            metadata: message.metadata || {},
+            roomId: message.roomId,
+            senderName: message.senderName
+          };
+
+          // Determine message type and add appropriate flags
+          if (message.senderId === 'system') {
+            processedMessage.isSystem = true;
+          } else if (message.senderId === clientStorage.client?.id) {
+            processedMessage.isClient = true;
+            processedMessage.senderName = clientStorage.client.name;
+          } else if (message.sentByOperator) {
+            processedMessage.isOperator = true;
+          }
+
+          // Add to unique messages map
+          uniqueMessages.set(message.messageId, processedMessage);
+        });
+        
+        // Convert map values to array and sort by timestamp
+        clientStorage.messages = Array.from(uniqueMessages.values())
+          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Save to storage
+        clientStorage.saveToStorage();
+        
+        console.log('Processed messages:', clientStorage.messages);
+        
+        // Notify through message handler
+        if (messageHandler && typeof messageHandler === 'function') {
+          messageHandler({
+            type: 'history',
+            messages: clientStorage.messages,
+            roomId: data.roomId
+          });
+        }
+      }
+    });
   }
   
   return socket;
@@ -404,7 +548,7 @@ export const initClientSocket = (name, number, clientId = null, msgHandler = nul
     type: "client"
   };
   
-  console.log(`Connecting to socket server as client with name: ${name} and number: ${number}`);
+  console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and clientId: ${clientId}`);
   
   // Connect to the server
   if (!socket.connected) {

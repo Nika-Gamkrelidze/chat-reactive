@@ -14,6 +14,7 @@ export const operatorStorage = {
   activeClients: [],
   pendingClients: [],
   clientMessages: {}, // Map of clientId -> messages array
+  activeRooms: [],
   
   // Initialize or update storage with session data
   updateFromSession: function(sessionData) {
@@ -68,6 +69,7 @@ export const operatorStorage = {
       sessionStorage.setItem('operatorActiveClients', JSON.stringify(this.activeClients));
       sessionStorage.setItem('operatorPendingClients', JSON.stringify(this.pendingClients));
       sessionStorage.setItem('operatorClientMessages', JSON.stringify(this.clientMessages));
+      sessionStorage.setItem('operatorActiveRooms', JSON.stringify(this.activeRooms));
     } catch (e) {
       console.error('Error saving operator data to sessionStorage:', e);
     }
@@ -80,6 +82,7 @@ export const operatorStorage = {
       const activeClients = sessionStorage.getItem('operatorActiveClients');
       const pendingClients = sessionStorage.getItem('operatorPendingClients');
       const clientMessages = sessionStorage.getItem('operatorClientMessages');
+      const activeRooms = sessionStorage.getItem('operatorActiveRooms');
       
       if (operatorData) {
         this.operator = JSON.parse(operatorData);
@@ -96,6 +99,10 @@ export const operatorStorage = {
       if (clientMessages) {
         this.clientMessages = JSON.parse(clientMessages);
       }
+      
+      if (activeRooms) {
+        this.activeRooms = JSON.parse(activeRooms);
+      }
     } catch (e) {
       console.error('Error loading operator data from sessionStorage:', e);
     }
@@ -104,10 +111,14 @@ export const operatorStorage = {
   },
   
   // Store operator credentials
-  storeOperatorCredentials: function(name, number) {
-    sessionStorage.setItem('operatorName', name);
-    sessionStorage.setItem('operatorNumber', number);
-    return this;
+  storeOperatorCredentials: function(name, number, operatorId = null) {
+    this.operator = {
+      id: operatorId || '',
+      name: name,
+      number: number,
+      socketId: ''
+    };
+    this.saveToStorage();
   },
   
   // Get operator credentials
@@ -115,7 +126,8 @@ export const operatorStorage = {
     try {
       const name = sessionStorage.getItem('operatorName');
       const number = sessionStorage.getItem('operatorNumber');
-      return { name, number };
+      const operatorId = sessionStorage.getItem('operatorId');
+      return { name, number, operatorId };
     } catch (e) {
       console.error('Error getting operator credentials from sessionStorage:', e);
       return { name: null, number: null };
@@ -128,12 +140,14 @@ export const operatorStorage = {
     this.activeClients = [];
     this.pendingClients = [];
     this.clientMessages = {};
+    this.activeRooms = [];
     
     try {
       sessionStorage.removeItem('operatorData');
       sessionStorage.removeItem('operatorActiveClients');
       sessionStorage.removeItem('operatorPendingClients');
       sessionStorage.removeItem('operatorClientMessages');
+      sessionStorage.removeItem('operatorActiveRooms');
       sessionStorage.removeItem('operatorName');
       sessionStorage.removeItem('operatorNumber');
     } catch (e) {
@@ -169,10 +183,6 @@ export const createOperatorSocket = (msgHandler = null, sessionHandler = null) =
       timeout: 20000,
       transports: ['websocket'], // Force WebSocket transport only
       path: '/socket.io/', // Explicitly set the socket.io path
-      withCredentials: true,
-      extraHeaders: {
-        "Access-Control-Allow-Origin": window.location.origin
-      }
     });
     
     // Enable Socket.IO debugging if needed
@@ -201,7 +211,7 @@ export const createOperatorSocket = (msgHandler = null, sessionHandler = null) =
 
     // Connection events
     socket.on('connect', () => {
-      console.log('Operator connected to server with ID:', socket.id);
+      console.log('Operator connected to server with ID:', socket.auth.operatorId);
       
       // Update operator info in storage
       operatorStorage.updateFromSession({
@@ -252,27 +262,28 @@ export const createOperatorSocket = (msgHandler = null, sessionHandler = null) =
       console.log('Operator session established with data:', data);
       
       // Store session data
-      if (data.operator) {
-        operatorStorage.operator = data.operator;
-        
+      if (data.operatorId) {
         // Store operator ID in sessionStorage for reconnection
+        sessionStorage.setItem('operatorId', data.operatorId);
+        
+        // Update operator data in storage
+        operatorStorage.operator = {
+          id: data.operatorId,
+          name: data.name || socket.auth.name,
+          number: data.number || socket.auth.number,
+          socketId: socket.id
+        };
+      } else if (data.operator) {
+        // Alternative data structure
         sessionStorage.setItem('operatorId', data.operator.id);
-        sessionStorage.setItem('operatorName', data.operator.name);
-        sessionStorage.setItem('operatorNumber', data.operator.number);
-      }
-      
-      // Update active clients in storage
-      if (data.activeClients) {
-        operatorStorage.updateFromSession({
-          activeClients: data.activeClients
-        });
-      }
-      
-      // Update pending clients in storage
-      if (data.pendingClients) {
-        operatorStorage.updateFromSession({
-          pendingClients: data.pendingClients
-        });
+        
+        // Update operator data in storage
+        operatorStorage.operator = {
+          id: data.operator.id,
+          name: data.operator.name || socket.auth.name,
+          number: data.operator.number || socket.auth.number,
+          socketId: socket.id
+        };
       }
       
       // Save to storage
@@ -388,6 +399,43 @@ export const createOperatorSocket = (msgHandler = null, sessionHandler = null) =
         });
       }
     });
+
+    // Inside createOperatorSocket function, add the session-reconnect handler
+    socket.on('session-reconnect', (data) => {
+      console.log('Operator session reconnected:', data);
+      
+      if (data.operator) {
+        // Store operator data
+        sessionStorage.setItem('operatorId', data.operator.id);
+        
+        // Update operator data in storage
+        operatorStorage.operator = {
+          id: data.operator.id,
+          name: data.operator.name,
+          number: data.operator.number,
+          socketId: socket.id,
+          status: data.operator.status,
+          departmentId: data.operator.departmentId
+        };
+        
+        // Update active rooms if provided
+        if (data.activeRooms) {
+          operatorStorage.activeRooms = data.activeRooms;
+        }
+        
+        // Save to storage
+        operatorStorage.saveToStorage();
+        
+        // Notify through session handler if provided
+        if (sessionHandler && typeof sessionHandler === 'function') {
+          sessionHandler({
+            type: 'session-reconnect',
+            operator: data.operator,
+            activeRooms: data.activeRooms
+          });
+        }
+      }
+    });
   }
   
   return socket;
@@ -403,18 +451,21 @@ export const initOperatorSocket = (name, number, operatorId = null, msgHandler =
     createOperatorSocket(msgHandler, sessionHandler);
   }
   
+  // Get operatorId from storage if not provided
+  const storedOperatorId = operatorId || sessionStorage.getItem('operatorId');
+  
   // Store operator credentials
-  operatorStorage.storeOperatorCredentials(name, number);
+  operatorStorage.storeOperatorCredentials(name, number, storedOperatorId);
   
   // Set authentication data
   socket.auth = {
     name: name,
     number: number,
-    operatorId: operatorId,
+    operatorId: storedOperatorId,
     type: "operator"
   };
   
-  console.log(`Connecting to socket server as operator with name: ${name} and number: ${number}`);
+  console.log(`Connecting to socket server as operator with name: ${name} and number: ${number} and operatorId: ${storedOperatorId}`);
   
   // Connect to the server
   if (!socket.connected) {
@@ -532,7 +583,7 @@ export const requestActiveClients = () => {
 export const isOperatorRegistered = () => {
   try {
     const credentials = operatorStorage.getOperatorCredentials();
-    return !!(credentials && credentials.name && credentials.number);
+    return !!(credentials && credentials.name && credentials.number && credentials.operatorId);
   } catch (error) {
     console.error('Error checking operator registration:', error);
     return false;
@@ -550,7 +601,7 @@ export const reconnectOperatorSocket = (msgHandler = null, sessionHandler = null
   const number = sessionStorage.getItem('operatorNumber');
   
   // If we have stored credentials, reconnect
-  if (name && number) {
+  if (name && number && operatorId) {
     return initOperatorSocket(name, number, operatorId, msgHandler, sessionHandler);
   }
   

@@ -9,43 +9,52 @@ function OperatorLogin() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  // Check if already registered on component mount
   useEffect(() => {
-    try {
-      if (isOperatorRegistered()) {
-        navigate('/operator/dashboard');
-      }
-    } catch (error) {
-      console.error('Error checking operator registration:', error);
-      // Don't redirect if there's an error
+    // Only check registration if we don't have credentials in session storage
+    if (!sessionStorage.getItem('operatorName')) {
+      const checkRegistration = async () => {
+        const isRegistered = await isOperatorRegistered();
+        if (isRegistered) {
+          navigate('/operator/dashboard', { replace: true });
+        }
+      };
+      checkRegistration();
     }
   }, [navigate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!name.trim() || !number.trim()) {
       setError('Please enter both name and number');
       return;
     }
-    
+
     try {
-      // Store credentials in session storage
+      // Store credentials first
       sessionStorage.setItem('operatorName', name);
       sessionStorage.setItem('operatorNumber', number);
       
-      // Initialize socket connection with operator credentials
+      // Initialize socket connection
       const socket = initOperatorSocket(name, number);
       
       if (socket) {
-        // Navigate to dashboard
-        navigate('/operator/dashboard');
+        // Wait for socket to connect before navigating
+        socket.on('connect', () => {
+          navigate('/operator/dashboard', { replace: true });
+        });
+        
+        socket.connect();
       } else {
-        setError('Failed to connect to chat server');
+        setError('Failed to create socket connection');
+        sessionStorage.removeItem('operatorName');
+        sessionStorage.removeItem('operatorNumber');
       }
     } catch (error) {
-      console.error('Error during operator login:', error);
-      setError('An error occurred during login. Please try again.');
+      console.error('Login error:', error);
+      setError('Failed to connect to chat server');
+      sessionStorage.removeItem('operatorName');
+      sessionStorage.removeItem('operatorNumber');
     }
   };
 
