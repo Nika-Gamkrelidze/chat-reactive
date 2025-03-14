@@ -1,43 +1,36 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import { 
-  initClientSocket, 
+  reconnectClientSocket, 
   setClientMessageHandler, 
   sendClientMessage, 
-  getClientSocket, 
   sendClientTypingStatus,
   clientStorage,
-  joinClientRoom,
-  reconnectClientSocket,
-  isClientRegistered,
-  setClientSessionHandler
+  disconnectClientSocket
 } from '../../services/socket/clientSocket';
-import { FiSend, FiUser } from 'react-icons/fi';
 
 function ClientChat() {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [hasOperator, setHasOperator] = useState(false);
   const [operatorInfo, setOperatorInfo] = useState(null);
-  const [isTyping, setIsTyping] = useState(false);
   const [operatorTyping, setOperatorTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-  const socketInitializedRef = useRef(false);
   const navigate = useNavigate();
+  
+  // Get client info from session storage
   const clientName = sessionStorage.getItem('clientName');
   const clientNumber = sessionStorage.getItem('clientNumber');
   
   useEffect(() => {
+    // Redirect to login if no client info
     if (!clientName || !clientNumber) {
       navigate('/client/login');
       return;
     }
 
-    socketInitializedRef.current = true;
-    
     // Define message handler function
     const handleNewMessage = (message) => {
       console.log('New message received in chat component:', message);
@@ -58,32 +51,14 @@ function ClientChat() {
       });
     };
     
-    // Define session handler function
-    const handleSessionUpdate = (sessionData) => {
-      console.log('Session update received:', sessionData);
-      
-      // Handle operator assignment
-      if (sessionData.type === 'operator_assigned' && sessionData.operator) {
-        setHasOperator(true);
-        setOperatorInfo(sessionData.operator);
-      } else if (sessionData.operator) {
-        setHasOperator(true);
-        setOperatorInfo(sessionData.operator);
-      }
-    };
-    
-    // Try to reconnect with stored credentials first
-    let socket = reconnectClientSocket(handleNewMessage, handleSessionUpdate);
-    
-    // If no stored credentials or reconnection failed, initialize with provided credentials
-    if (!socket) {
-      socket = initClientSocket(clientName, clientNumber);
-      setClientMessageHandler(handleNewMessage);
-      setClientSessionHandler(handleSessionUpdate);
-    }
+    // Try to reconnect with stored credentials
+    const socket = reconnectClientSocket();
     
     if (socket) {
       setIsConnected(true);
+      
+      // Set message handler
+      setClientMessageHandler(handleNewMessage);
       
       // Load existing messages from storage
       const storedMessages = clientStorage.messages || [];
@@ -100,7 +75,7 @@ function ClientChat() {
     
     // Clean up on unmount
     return () => {
-      socket.disconnect();
+      disconnectClientSocket();
     };
   }, [clientName, clientNumber, navigate]);
   
@@ -109,70 +84,57 @@ function ClientChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
   
-  const handleInputChange = (e) => {
-    setInputMessage(e.target.value);
-    
-    // Handle typing indicator
-    if (!isTyping) {
-      setIsTyping(true);
-      sendClientTypingStatus(true);
-    }
-    
-    // Clear previous timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    
-    // Set new timeout to stop typing indicator after 2 seconds
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-      sendClientTypingStatus(false);
-    }, 2000);
-  };
-  
+  // Handle sending a message
   const handleSendMessage = (e) => {
     e.preventDefault();
     
     if (!inputMessage.trim()) return;
     
-    console.log('Sending message:', inputMessage);
-    
-    // Send message through socket
-    const sent = sendClientMessage(inputMessage);
-    
-    if (sent) {
-      console.log('Message sent successfully');
-      // Clear input
+    // Send message to server
+    if (sendClientMessage(inputMessage)) {
+      // Add message to local state
+      const newMessage = {
+        messageId: `client_${Date.now()}`,
+        text: inputMessage,
+        sender: 'client',
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, newMessage]);
       setInputMessage('');
-      // Reset typing indicator
-      setIsTyping(false);
+      
+      // Clear typing indicator
       clearTimeout(typingTimeoutRef.current);
-    } else {
-      console.error('Failed to send message');
-      // You might want to show an error to the user here
+      sendClientTypingStatus(false);
     }
-  };
-
-  const handleLogout = () => {
-    // Clear session storage
-    sessionStorage.removeItem('clientName');
-    sessionStorage.removeItem('clientNumber');
-    
-    // Disconnect socket if needed
-    const socket = getClientSocket();
-    if (socket) {
-      socket.disconnect();
-    }
-    
-    // Navigate to login
-    navigate('/client/login');
   };
   
+  // Handle input change and typing indicator
+  const handleInputChange = (e) => {
+    setInputMessage(e.target.value);
+    
+    // Send typing indicator
+    clearTimeout(typingTimeoutRef.current);
+    sendClientTypingStatus(true);
+    
+    // Clear typing indicator after delay
+    typingTimeoutRef.current = setTimeout(() => {
+      sendClientTypingStatus(false);
+    }, 2000);
+  };
+  
+  // Handle logout
+  const handleLogout = () => {
+    disconnectClientSocket();
+    clientStorage.clear();
+    navigate('/client/login', { replace: true });
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto h-screen flex flex-col">
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-md flex flex-col h-[600px]">
         {/* Header */}
-        <div className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
+        <div className="p-4 border-b flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="h-10 w-10 rounded-full bg-gradient-to-r from-primary-500 to-primary-600 flex items-center justify-center text-white font-medium">
               {clientName?.[0]?.toUpperCase()}
@@ -191,7 +153,7 @@ function ClientChat() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4" ref={messagesEndRef}>
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {messages.map((msg, index) => (
             <div
               key={index}
@@ -213,13 +175,14 @@ function ClientChat() {
               </div>
             </div>
           ))}
-          {isTyping && (
+          {operatorTyping && (
             <div className="flex items-center space-x-2 text-sm text-gray-500">
               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></div>
               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></div>
             </div>
           )}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Input */}

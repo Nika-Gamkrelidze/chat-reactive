@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import { 
   initClientSocket, 
   isClientRegistered, 
@@ -14,16 +13,11 @@ function ClientLogin() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!sessionStorage.getItem('clientName')) {
-      const checkRegistration = async () => {
-        const isRegistered = await isClientRegistered();
-        if (isRegistered) {
-          navigate('/client/chat', { replace: true });
-        }
-      };
-      checkRegistration();
+    // Check if already registered
+    if (isClientRegistered()) {
+      navigate('/client/chat', { replace: true });
     }
-  }, [navigate]); // Add navigate to dependencies
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -47,13 +41,17 @@ function ClientLogin() {
         }
         
         // Navigate to chat page after receiving session data
-        console.log('Navigating to chat page...');
         navigate('/client/chat', { replace: true });
       });
       
       // Initialize socket connection
       const socket = initClientSocket(name, number);
       
+      // Handle connection error
+      socket.on('connect_error', (error) => {
+        console.error('Connection error:', error);
+        setError('Failed to connect: ' + error.message);
+      });
       
     } catch (error) {
       setError('Failed to connect. Please try again.');
