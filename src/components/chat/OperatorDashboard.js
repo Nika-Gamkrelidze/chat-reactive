@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
   reconnectOperatorSocket,
+  initOperatorSocket,
   sendMessageToClient, 
   requestClientQueue,
   requestActiveClients,
   setMessageHandler,
   setClientListHandler,
   setClientQueueHandler,
+  setSessionHandler,
   operatorStorage,
   disconnectOperatorSocket,
   acceptClient
@@ -31,6 +33,7 @@ function OperatorDashboard() {
   // Initialize socket and set up event handlers
   useEffect(() => {
     if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
     
     const operatorName = sessionStorage.getItem('operatorName');
     const operatorNumber = sessionStorage.getItem('operatorNumber');
@@ -42,62 +45,81 @@ function OperatorDashboard() {
     }
 
     const setupSocket = async () => {
-      try {
-        // Try to reconnect with stored credentials
-        const socket = reconnectOperatorSocket();
+      // Set up message handler
+      setMessageHandler((message) => {
+        console.log('Message received in dashboard:', message);
         
-        if (!socket) {
-          console.error('Failed to reconnect socket');
-          navigate('/operator/login');
+        // Handle typing indicator
+        if (message.type === 'typing') {
+          // Handle typing indicator if needed
           return;
         }
         
-        // Set up message handler
-        setMessageHandler((message) => {
-          console.log('Message received in dashboard:', message);
+        // Update messages state
+        setMessages(prevMessages => {
+          const clientId = message.clientId;
+          const clientMessages = [...(prevMessages[clientId] || [])];
           
-          // Handle typing indicator
-          if (message.type === 'typing') {
-            // Handle typing indicator if needed
-            return;
-          }
+          // Check if message already exists
+          const exists = clientMessages.some(m => m.messageId === message.messageId);
+          if (exists) return prevMessages;
           
-          // Update messages state
-          setMessages(prevMessages => {
-            const clientId = message.clientId;
-            const clientMessages = [...(prevMessages[clientId] || [])];
+          // Add new message
+          clientMessages.push(message);
+          
+          // Return updated messages
+          return {
+            ...prevMessages,
+            [clientId]: clientMessages
+          };
+        });
+      });
+      
+      // Set up session handler
+      setSessionHandler((sessionData) => {
+        console.log('Session update received in OperatorDashboard:', sessionData);
+      });
+      
+      // Set up client list handler
+      setClientListHandler((clients) => {
+        console.log('Active clients updated:', clients);
+        setActiveClients(clients);
+        operatorStorage.activeClients = clients;
+        operatorStorage.saveToStorage();
+      });
+      
+      // Set up client queue handler
+      setClientQueueHandler((queue) => {
+        console.log('Client queue updated:', queue);
+        setPendingClients(queue);
+        operatorStorage.pendingClients = queue;
+        operatorStorage.saveToStorage();
+      });
+      
+      // Try to reconnect with stored credentials
+      let socket;
+      
+      if (operatorId) {
+        // Try to reconnect with existing ID
+        socket = reconnectOperatorSocket();
+        
+        // Set up connection error handler
+        if (socket) {
+          socket.on('connect_error', (error) => {
+            console.error('Reconnection error:', error);
             
-            // Check if message already exists
-            const exists = clientMessages.some(m => m.messageId === message.messageId);
-            if (exists) return prevMessages;
-            
-            // Add new message
-            clientMessages.push(message);
-            
-            // Sort by timestamp
-            clientMessages.sort((a, b) => 
-              new Date(a.timestamp) - new Date(b.timestamp)
-            );
-            
-            return {
-              ...prevMessages,
-              [clientId]: clientMessages
-            };
+            // If reconnection fails, try to initialize a new connection
+            socket = initOperatorSocket(operatorName, operatorNumber);
           });
-        });
-        
-        // Set up client list handler
-        setClientListHandler((clients) => {
-          console.log('Active clients updated:', clients);
-          setActiveClients(clients);
-        });
-        
-        // Set up client queue handler
-        setClientQueueHandler((queue) => {
-          console.log('Client queue updated:', queue);
-          setPendingClients(queue);
-        });
-        
+        }
+      }
+      
+      // If no stored ID or reconnection failed, initialize a new connection
+      if (!socket) {
+        socket = initOperatorSocket(operatorName, operatorNumber);
+      }
+      
+      if (socket) {
         // Request initial data
         requestActiveClients();
         requestClientQueue();
@@ -117,93 +139,80 @@ function OperatorDashboard() {
         if (storedPendingClients.length > 0) {
           setPendingClients(storedPendingClients);
         }
-        
-        isInitializedRef.current = true;
-      } catch (error) {
-        console.error('Error setting up socket:', error);
+      } else {
+        // If connection failed, redirect to login
         navigate('/operator/login');
       }
     };
     
     setupSocket();
     
+    // Clean up on unmount
     return () => {
       disconnectOperatorSocket();
     };
   }, [navigate]);
   
-  // Handle sending a message to the selected client
+  // Handle sending a message to a client
   const handleSendMessage = (e) => {
     e.preventDefault();
     
     if (!selectedClient || !inputMessage.trim()) return;
     
-    const messageText = inputMessage.trim();
-    setInputMessage('');
-    
     // Send message to client
-    sendMessageToClient(selectedClient.id, messageText);
+    const success = sendMessageToClient(selectedClient.id, inputMessage);
     
-    // Add message to local state
-    const newMessage = {
-      messageId: `operator_${Date.now()}`,
-      clientId: selectedClient.id,
-      text: messageText,
-      timestamp: new Date().toISOString(),
-      sentByOperator: true
-    };
-    
-    setMessages(prevMessages => {
-      const clientMessages = [...(prevMessages[selectedClient.id] || [])];
-      clientMessages.push(newMessage);
-      
-      return {
-        ...prevMessages,
-        [selectedClient.id]: clientMessages
+    if (success) {
+      // Add message to local state
+      const newMessage = {
+        messageId: `operator_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        text: inputMessage,
+        clientId: selectedClient.id,
+        sentByOperator: true,
+        timestamp: new Date().toISOString()
       };
-    });
+      
+      setMessages(prevMessages => {
+        const clientMessages = [...(prevMessages[selectedClient.id] || []), newMessage];
+        return {
+          ...prevMessages,
+          [selectedClient.id]: clientMessages
+        };
+      });
+      
+      setInputMessage('');
+    }
   };
   
-  // Handle selecting a client
+  // Handle accepting a client from the queue
+  const handleAcceptClient = (client) => {
+    acceptClient(client.id);
+  };
+  
+  // Handle selecting a client to chat with
   const handleSelectClient = (client) => {
     setSelectedClient(client);
   };
   
-  // Handle operator logout
-  const handleLogout = () => {
-    disconnectOperatorSocket();
-    operatorStorage.clear();
-    logout();
-    navigate('/operator/login');
-  };
-
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r flex flex-col">
+      <div className="w-64 bg-white border-r overflow-y-auto">
         <div className="p-4 border-b">
           <h2 className="text-lg font-semibold">Operator Dashboard</h2>
           <p className="text-sm text-gray-500">{user?.name || 'Operator'}</p>
-          <button 
-            onClick={handleLogout}
-            className="mt-2 text-sm text-red-500 hover:text-red-700"
-          >
-            Logout
-          </button>
         </div>
         
         {/* Active Clients */}
         <div className="p-4 border-b">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Active Clients</h3>
+          <h3 className="font-medium mb-2">Active Clients</h3>
           <div className="space-y-2">
             {activeClients.length > 0 ? (
               activeClients.map(client => (
                 <div 
                   key={client.id}
                   className={`p-2 rounded cursor-pointer ${
-                    selectedClient?.id === client.id 
-                      ? 'bg-blue-100' 
-                      : 'hover:bg-gray-100'
+                    selectedClient?.id === client.id ? 'bg-blue-100' : 'hover:bg-gray-100'
                   }`}
                   onClick={() => handleSelectClient(client)}
                 >
@@ -219,19 +228,21 @@ function OperatorDashboard() {
         
         {/* Pending Clients */}
         <div className="p-4">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Pending Clients</h3>
+          <h3 className="font-medium mb-2">Pending Clients</h3>
           <div className="space-y-2">
             {pendingClients.length > 0 ? (
               pendingClients.map(client => (
                 <div 
                   key={client.id}
-                  className="p-2 bg-yellow-50 rounded"
+                  className="p-2 rounded bg-yellow-50 flex justify-between items-center"
                 >
-                  <div className="font-medium">{client.name}</div>
-                  <div className="text-xs text-gray-500">{client.number}</div>
-                  <button 
-                    className="mt-1 text-xs bg-green-500 text-white px-2 py-1 rounded"
-                    onClick={() => acceptClient(client.id)}
+                  <div>
+                    <div className="font-medium">{client.name}</div>
+                    <div className="text-xs text-gray-500">{client.number}</div>
+                  </div>
+                  <button
+                    className="px-2 py-1 bg-blue-500 text-white text-xs rounded"
+                    onClick={() => handleAcceptClient(client)}
                   >
                     Accept
                   </button>

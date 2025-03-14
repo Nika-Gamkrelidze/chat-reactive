@@ -123,18 +123,17 @@ export const clientStorage = {
 
 // Create socket instance without connecting
 export const createClientSocket = () => {
-  // Create socket instance if not already created
   if (!socket) {
     console.log(`Creating socket instance for client at: ${config.server.namespaceUrl}`);
     
     socket = io(config.server.namespaceUrl, {
       autoConnect: false,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
-      transports: ['websocket']
+      transports: ['websocket', 'polling']
     });
     
     // Add logging for socket events if debug is enabled
@@ -148,6 +147,7 @@ export const createClientSocket = () => {
 
       // Add outgoing event logging
       const originalEmit = socket.emit;
+
       socket.emit = function(event, ...args) {
         console.groupCollapsed(`%c Client Socket.IO SEND`, 'color: #e74c3c; font-weight: bold;');
         console.log('Event:', event, ...args);
@@ -165,16 +165,30 @@ export const createClientSocket = () => {
       console.log(`Client disconnected from server: ${reason}`);
     });
     
+    socket.on('connect_error', (error) => {
+      console.error('Client socket connection error:', error);
+    });
+    
     // Handle session establishment
     socket.on('session', (data) => {
       console.log('Client session established with data:', data);
       
-      // Update client storage with session data
+      // Clear existing data first
+      clientStorage.clear();
+      
+      // Update storage with new session data
       clientStorage.updateFromSession(data);
       
-      // Store client ID in session storage
+      // Update socket auth with new client ID if available
       if (data.client && data.client.id) {
+        socket.auth.clientId = data.client.id;
         sessionStorage.setItem('clientId', data.client.id);
+      }
+      
+      // Store client name and number
+      if (socket.auth.name && socket.auth.number) {
+        sessionStorage.setItem('clientName', socket.auth.name);
+        sessionStorage.setItem('clientNumber', socket.auth.number);
       }
       
       // Call session handler if defined
@@ -220,6 +234,18 @@ export const createClientSocket = () => {
         });
       }
     });
+
+    socket.on('session-reconnect', (data) => {
+      console.log('Client session reconnected with data:', data);
+      
+      // Update storage with reconnected session data
+      clientStorage.updateFromSession(data);
+      
+      // Call session handler if defined
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler(data);
+      }
+    });
   }
   
   return socket;
@@ -230,6 +256,9 @@ export const initClientSocket = (name, number, clientId = null) => {
   // Create socket instance if not already created
   if (!socket) {
     createClientSocket();
+  } else if (socket.connected) {
+    // If already connected, disconnect first to reset state
+    socket.disconnect();
   }
   
   // Store user credentials
@@ -239,21 +268,19 @@ export const initClientSocket = (name, number, clientId = null) => {
   socket.auth = {
     name: name,
     number: number,
-    clientId: clientId || sessionStorage.getItem('clientId'),
+    userId: clientId || sessionStorage.getItem('clientId'),
     type: "client"
   };
   
-  console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and clientId: ${clientId || 'null'}`);
+  console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and userId: ${clientId || 'null'}`);
   
   // Connect to the server
-  if (!socket.connected) {
-    socket.connect();
-  }
+  socket.connect();
   
   return socket;
 };
 
-// Check if we have stored credentials and reconnect if available
+// Reconnect with stored credentials
 export const reconnectClientSocket = () => {
   // Load any existing data from storage
   clientStorage.loadFromStorage();
@@ -263,9 +290,31 @@ export const reconnectClientSocket = () => {
   const name = sessionStorage.getItem('clientName');
   const number = sessionStorage.getItem('clientNumber');
   
+  console.log('Attempting to reconnect with stored credentials:', { clientId, name, number });
+  
   // If we have stored credentials, reconnect
   if (name && number) {
-    return initClientSocket(name, number, clientId);
+    // Create socket instance if not already created
+    if (!socket) {
+      createClientSocket();
+    }
+    
+    // Set authentication data with stored credentials
+    socket.auth = {
+      name: name,
+      number: number,
+      userId: clientId, // Include clientId if available
+      type: "client"
+    };
+    
+    console.log(`Reconnecting to socket server as client with name: ${name}, number: ${number}, and userId: ${clientId || 'null'}`);
+    
+    // Connect to the server
+    if (!socket.connected) {
+      socket.connect();
+    }
+    
+    return socket;
   }
   
   return null;
@@ -290,12 +339,17 @@ export const setClientSessionHandler = (handler) => {
   }
 };
 
-export const getClientSocket = () => {
-  return socket;
+// Disconnect client socket
+export const disconnectClientSocket = () => {
+  if (socket && socket.connected) {
+    console.log('Disconnecting client socket');
+    socket.disconnect();
+  }
 };
 
-export const disconnectClientSocket = () => {
-  if (socket) socket.disconnect();
+// Get client socket instance
+export const getClientSocket = () => {
+  return socket;
 };
 
 // Send a message to the operator
@@ -324,4 +378,9 @@ export const sendClientTypingStatus = (isTyping) => {
 export const isClientRegistered = () => {
   const { name, number } = clientStorage.getUserCredentials();
   return !!(name && number);
+};
+
+// Clear all client data
+export const clearClientData = () => {
+  clientStorage.clear();
 }; 

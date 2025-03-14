@@ -159,12 +159,22 @@ export const createOperatorSocket = () => {
     socket.on('session', (data) => {
       console.log('Operator session established with data:', data);
       
-      // Update operator storage with session data
+      // Clear existing data first
+      operatorStorage.clear();
+      
+      // Update storage with new session data
       operatorStorage.updateFromSession(data);
       
-      // Store operator ID in session storage
-      if (data.operatorId) {
-        sessionStorage.setItem('operatorId', data.operatorId);
+      // Update socket auth with new operator ID if available
+      if (data.operator && data.operator.id) {
+        socket.auth.operatorId = data.operator.id;
+        sessionStorage.setItem('operatorId', data.operator.id);
+      }
+      
+      // Store operator name and number
+      if (socket.auth.name && socket.auth.number) {
+        sessionStorage.setItem('operatorName', socket.auth.name);
+        sessionStorage.setItem('operatorNumber', socket.auth.number);
       }
       
       // Call session handler if defined
@@ -237,31 +247,28 @@ export const createOperatorSocket = () => {
   return socket;
 };
 
-// Initialize socket connection with operator credentials
-export const initOperatorSocket = (username, number, operatorId = null) => {
+// Initialize socket connection with user credentials
+export const initOperatorSocket = (name, number, operatorId = null) => {
   // Create socket instance if not already created
   if (!socket) {
     createOperatorSocket();
+  } else if (socket.connected) {
+    // If already connected, disconnect first to reset state
+    socket.disconnect();
   }
-  
-  // Store operator credentials
-  sessionStorage.setItem('operatorName', username);
-  sessionStorage.setItem('operatorNumber', number);
   
   // Set authentication data
   socket.auth = {
-    name: username,
+    name: name,
     number: number,
-    operatorId: operatorId || sessionStorage.getItem('operatorId'),
+    userId: operatorId || sessionStorage.getItem('operatorId'),
     type: "operator"
   };
   
-  console.log(`Connecting to socket server as operator with name: ${username} and number: ${number} and operatorId: ${operatorId || 'null'}`);
+  console.log(`Connecting to socket server as operator with name: ${name} and number: ${number} and userId: ${operatorId || 'null'}`);
   
   // Connect to the server
-  if (!socket.connected) {
-    socket.connect();
-  }
+  socket.connect();
   
   return socket;
 };
@@ -276,9 +283,31 @@ export const reconnectOperatorSocket = () => {
   const name = sessionStorage.getItem('operatorName');
   const number = sessionStorage.getItem('operatorNumber');
   
+  console.log('Attempting to reconnect with stored operator credentials:', { operatorId, name, number });
+  
   // If we have stored credentials, reconnect
   if (name && number) {
-    return initOperatorSocket(name, number, operatorId);
+    // Create socket instance if not already created
+    if (!socket) {
+      createOperatorSocket();
+    }
+    
+    // Set authentication data with stored credentials
+    socket.auth = {
+      name: name,
+      number: number,
+      userId: operatorId, // Include operatorId if available
+      type: "operator"
+    };
+    
+    console.log(`Reconnecting to socket server as operator with name: ${name}, number: ${number}, and userId: ${operatorId || 'null'}`);
+    
+    // Connect to the server
+    if (!socket.connected) {
+      socket.connect();
+    }
+    
+    return socket;
   }
   
   return null;
@@ -366,4 +395,9 @@ export const sendTypingStatus = (clientId, isTyping) => {
   if (socket && socket.connected) {
     socket.emit('operator-typing', { clientId, isTyping });
   }
+};
+
+// Clear all operator data
+export const clearOperatorData = () => {
+  operatorStorage.clear();
 };
