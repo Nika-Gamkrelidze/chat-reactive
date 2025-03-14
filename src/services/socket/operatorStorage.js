@@ -1,150 +1,142 @@
-// Operator storage for managing state between reconnects
-const operatorStorage = {
-  operatorId: null,
-  activeClients: [],
-  pendingClients: [],
-  messages: {},
+// Operator storage for persisting data between page reloads
+class OperatorStorage {
+  constructor() {
+    this.operatorId = null;
+    this.operatorName = null;
+    this.operatorNumber = null;
+    this.messages = {};
+    this.clients = {};
+    this.loadFromStorage();
+  }
   
-  // Add message to storage
-  addMessage(message) {
-    const clientId = message.clientId;
+  // Load data from session storage
+  loadFromStorage() {
+    try {
+      const storedData = sessionStorage.getItem('operatorData');
+      if (storedData) {
+        const parsedData = JSON.parse(storedData);
+        this.operatorId = parsedData.operatorId || null;
+        this.operatorName = parsedData.operatorName || null;
+        this.operatorNumber = parsedData.operatorNumber || null;
+        this.messages = parsedData.messages || {};
+        this.clients = parsedData.clients || {};
+      }
+      
+      // Also load from individual session storage items
+      this.operatorId = this.operatorId || sessionStorage.getItem('operatorId');
+      this.operatorName = this.operatorName || sessionStorage.getItem('operatorName');
+      this.operatorNumber = this.operatorNumber || sessionStorage.getItem('operatorNumber');
+    } catch (error) {
+      console.error('Error loading operator data from storage:', error);
+    }
+  }
+  
+  // Save data to session storage
+  saveToStorage() {
+    try {
+      const dataToStore = {
+        operatorId: this.operatorId,
+        operatorName: this.operatorName,
+        operatorNumber: this.operatorNumber,
+        messages: this.messages,
+        clients: this.clients
+      };
+      
+      sessionStorage.setItem('operatorData', JSON.stringify(dataToStore));
+      
+      // Also save individual items for backward compatibility
+      if (this.operatorId) sessionStorage.setItem('operatorId', this.operatorId);
+      if (this.operatorName) sessionStorage.setItem('operatorName', this.operatorName);
+      if (this.operatorNumber) sessionStorage.setItem('operatorNumber', this.operatorNumber);
+    } catch (error) {
+      console.error('Error saving operator data to storage:', error);
+    }
+  }
+  
+  // Update storage from session data
+  updateFromSession(sessionData) {
+    if (sessionData.operator) {
+      this.operatorId = sessionData.operator.id || this.operatorId;
+      this.operatorName = sessionData.operator.name || this.operatorName;
+      this.operatorNumber = sessionData.operator.number || this.operatorNumber;
+    }
     
-    // Initialize client messages array if it doesn't exist
+    if (sessionData.activeClients) {
+      sessionData.activeClients.forEach(client => {
+        if (!this.clients) {
+          this.clients = {};
+        }
+        this.clients[client.id] = client;
+      });
+    }
+    
+    if (sessionData.messages) {
+      Object.keys(sessionData.messages).forEach(clientId => {
+        this.messages[clientId] = sessionData.messages[clientId];
+      });
+    }
+    
+    this.saveToStorage();
+  }
+  
+  // Add a message to storage
+  addMessage(message) {
+    const clientId = message.sentByOperator ? message.receiverId : message.senderId;
+    
+    if (!clientId) {
+      console.error('Cannot add message: missing client ID', message);
+      return;
+    }
+    
     if (!this.messages[clientId]) {
       this.messages[clientId] = [];
     }
     
     // Check if message already exists
-    const messageExists = this.messages[clientId].some(
-      m => m.messageId === message.messageId
+    const existingIndex = this.messages[clientId].findIndex(
+      existingMsg => existingMsg.messageId === message.messageId
     );
     
-    if (!messageExists) {
+    if (existingIndex === -1) {
+      // Add new message
       this.messages[clientId].push(message);
-      this.saveToStorage();
-    }
-  },
-  
-  // Update storage from session data
-  updateFromSession(data) {
-    if (data.operator) {
-      this.operatorId = data.operator.id;
       
-      // Store operator data in session storage
-      sessionStorage.setItem('operatorId', data.operator.id);
-      sessionStorage.setItem('operatorName', data.operator.name);
-      sessionStorage.setItem('operatorNumber', data.operator.number);
-      
-      // Store user data for auth context
-      const userData = {
-        id: data.operator.id,
-        name: data.operator.name,
-        number: data.operator.number,
-        role: 'operator'
+      // Sort messages by timestamp
+      this.messages[clientId].sort(
+        (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+      );
+    } else {
+      // Update existing message
+      this.messages[clientId][existingIndex] = {
+        ...this.messages[clientId][existingIndex],
+        ...message,
+        isPending: false
       };
-      sessionStorage.setItem('user', JSON.stringify(userData));
     }
     
-    // Handle active rooms from reconnection
-    if (data.activeRooms && Array.isArray(data.activeRooms)) {
-      this.activeClients = data.activeRooms
-        .filter(room => room.client)
-        .map(room => room.client);
-      
-      // Initialize messages from active rooms
-      data.activeRooms.forEach(room => {
-        if (room.client && room.messages) {
-          this.messages[room.client.id] = room.messages;
-        }
-      });
+    // Store roomId in client data if available
+    if (message.roomId && (!this.clients[clientId] || !this.clients[clientId].roomId)) {
+      if (!this.clients[clientId]) {
+        this.clients[clientId] = { id: clientId };
+      }
+      this.clients[clientId].roomId = message.roomId;
     }
     
     this.saveToStorage();
-  },
+  }
   
-  // Save current state to session storage
-  saveToStorage() {
-    try {
-      sessionStorage.setItem('operatorActiveClients', JSON.stringify(this.activeClients));
-      sessionStorage.setItem('operatorPendingClients', JSON.stringify(this.pendingClients));
-      sessionStorage.setItem('operatorMessages', JSON.stringify(this.messages));
-      
-      // Also save operator data
-      const operatorData = {
-        id: this.operatorId,
-        name: sessionStorage.getItem('operatorName'),
-        number: sessionStorage.getItem('operatorNumber')
-      };
-      sessionStorage.setItem('operatorData', JSON.stringify(operatorData));
-    } catch (error) {
-      console.error('Error saving operator data to session storage:', error);
-    }
-  },
-  
-  // Load state from session storage
-  loadFromStorage() {
-    try {
-      const activeClients = sessionStorage.getItem('operatorActiveClients');
-      const pendingClients = sessionStorage.getItem('operatorPendingClients');
-      const messages = sessionStorage.getItem('operatorMessages');
-      const operatorData = sessionStorage.getItem('operatorData');
-      
-      if (activeClients) {
-        this.activeClients = JSON.parse(activeClients);
-      }
-      
-      if (pendingClients) {
-        this.pendingClients = JSON.parse(pendingClients);
-      }
-      
-      if (messages) {
-        this.messages = JSON.parse(messages);
-      }
-      
-      if (operatorData) {
-        const parsedData = JSON.parse(operatorData);
-        this.operatorId = parsedData.id;
-      } else {
-        // Try to get operatorId directly if operatorData is not available
-        this.operatorId = sessionStorage.getItem('operatorId');
-      }
-    } catch (error) {
-      console.error('Error loading operator data from session storage:', error);
-    }
-  },
-  
-  // Clear all stored data
+  // Clear all data
   clear() {
     this.operatorId = null;
-    this.activeClients = [];
-    this.pendingClients = [];
+    this.operatorName = null;
+    this.operatorNumber = null;
     this.messages = {};
-    
-    try {
-      sessionStorage.removeItem('operatorActiveClients');
-      sessionStorage.removeItem('operatorPendingClients');
-      sessionStorage.removeItem('operatorMessages');
-      sessionStorage.removeItem('operatorData');
-      // Don't remove operatorId, operatorName, operatorNumber, or user here
-      // as they are needed for reconnection
-    } catch (error) {
-      console.error('Error clearing operator data from session storage:', error);
-    }
-  },
-  
-  // Clear all operator data including login credentials
-  clearAll() {
-    this.clear();
-    
-    try {
-      sessionStorage.removeItem('operatorId');
-      sessionStorage.removeItem('operatorName');
-      sessionStorage.removeItem('operatorNumber');
-      sessionStorage.removeItem('user');
-    } catch (error) {
-      console.error('Error clearing all operator data from session storage:', error);
-    }
+    this.clients = {};
+    sessionStorage.removeItem('operatorData');
+    sessionStorage.removeItem('operatorId');
+    sessionStorage.removeItem('operatorName');
+    sessionStorage.removeItem('operatorNumber');
   }
-};
+}
 
-export default operatorStorage; 
+export const operatorStorage = new OperatorStorage(); 

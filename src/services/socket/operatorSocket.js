@@ -245,16 +245,23 @@ export const createOperatorSocket = () => {
     });
     
     // Handle client list updates
-    socket.on('active_clients', (data) => {
-      console.log('Received active clients:', data);
+    socket.on('active_clients', (clients) => {
+      if (DEBUG_SOCKET) {
+        console.log('Operator received active clients update:', clients);
+      }
       
-      if (data && data.clients) {
-        operatorStorage.activeClients = data.clients;
-        operatorStorage.saveToStorage();
-        
-        if (clientListHandler && typeof clientListHandler === 'function') {
-          clientListHandler(data.clients);
+      // Store clients in operator storage
+      clients.forEach(client => {
+        if (!operatorStorage.clients) {
+          operatorStorage.clients = {};
         }
+        operatorStorage.clients[client.id] = client;
+      });
+      operatorStorage.saveToStorage();
+      
+      // Call client list handler if defined
+      if (clientListHandler && typeof clientListHandler === 'function') {
+        clientListHandler(clients);
       }
     });
     

@@ -206,19 +206,26 @@ function OperatorDashboard() {
   
   // Handle client selection
   const handleClientSelect = (client) => {
+    console.log('Selected client:', client);
     setSelectedClient(client);
     
-    // Load messages for this client if not already loaded
-    if (!messages[client.id]) {
-      // Try to load from storage first
-      const storedMessages = operatorStorage.messages[client.id];
-      if (storedMessages && storedMessages.length > 0) {
-        setMessages(prev => ({
-          ...prev,
-          [client.id]: storedMessages
-        }));
-      }
+    // Mark client as read when selected
+    setActiveClients(prevClients => 
+      prevClients.map(c => 
+        c.id === client.id ? { ...c, hasUnread: false } : c
+      )
+    );
+    
+    // Request latest messages for this client if needed
+    if (!messages[client.id] || messages[client.id].length === 0) {
+      console.log('Requesting messages for client:', client.id);
+      // You might want to add a function to request messages for a specific client
     }
+  };
+  
+  // Handle accepting a client from the queue
+  const handleAcceptClient = (clientId) => {
+    acceptClient(clientId);
   };
   
   // Handle sending a message
@@ -229,29 +236,36 @@ function OperatorDashboard() {
       return;
     }
     
-    // Get room ID from the selected client
-    const roomId = selectedClient.roomId;
+    // Get room ID from the selected client or from the messages
+    let roomId = selectedClient.roomId;
+    
+    // If roomId is not directly available in the client object, try to find it in messages
+    if (!roomId && messages[selectedClient.id] && messages[selectedClient.id].length > 0) {
+      // Get roomId from the first message for this client
+      roomId = messages[selectedClient.id][0].roomId;
+      console.log('Found room ID in messages:', roomId);
+    }
+    
+    // If still no roomId, try to get it from operatorStorage
+    if (!roomId && operatorStorage.clients && operatorStorage.clients[selectedClient.id]) {
+      roomId = operatorStorage.clients[selectedClient.id].roomId;
+      console.log('Found room ID in operator storage:', roomId);
+    }
     
     if (!roomId) {
-      console.error('Cannot send message: room ID not available');
+      console.error('Cannot send message: room ID not available for client', selectedClient.id);
+      // Show error to user
+      alert('Cannot send message: connection issue. Please try again later.');
       return;
     }
+    
+    console.log('Sending message to client', selectedClient.id, 'in room', roomId);
     
     // Send message with the correct parameters (clientId, text, roomId)
     sendMessageToClient(selectedClient.id, inputMessage.trim(), roomId);
     
     // Clear input
     setInputMessage('');
-  };
-  
-  // Handle accepting clients from queue
-  const handleAcceptClient = (client) => {
-    if (!isConnected) return;
-    
-    acceptClient(client.id);
-    
-    // Remove from pending clients (optimistic update)
-    setPendingClients(prev => prev.filter(c => c.id !== client.id));
   };
   
   // Handle logout
@@ -337,7 +351,7 @@ function OperatorDashboard() {
                       <div className="font-medium">{client.name}</div>
                       <div className="text-sm text-gray-500 mb-2">{client.number}</div>
                       <button
-                        onClick={() => handleAcceptClient(client)}
+                        onClick={() => handleAcceptClient(client.id)}
                         className="w-full px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
                         disabled={!isConnected}
                       >
