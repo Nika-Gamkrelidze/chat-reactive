@@ -2,8 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
-  reconnectOperatorSocket,
   initOperatorSocket,
+  reconnectOperatorSocket,
   sendMessageToClient, 
   requestClientQueue,
   requestActiveClients,
@@ -11,8 +11,9 @@ import {
   setClientListHandler,
   setClientQueueHandler,
   setSessionHandler,
-  operatorStorage,
   disconnectOperatorSocket,
+  operatorStorage,
+  getOperatorSocket,
   acceptClient
 } from '../../services/socket/operatorSocket';
 
@@ -26,297 +27,413 @@ function OperatorDashboard() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [messages, setMessages] = useState({});
   const [inputMessage, setInputMessage] = useState('');
+  const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
   
   // Refs to prevent multiple effect runs
-  const isInitializedRef = useRef(false);
+  const socketInitializedRef = useRef(false);
+  const messageHandlerRef = useRef(null);
+  const clientListHandlerRef = useRef(null);
+  const clientQueueHandlerRef = useRef(null);
+  const sessionHandlerRef = useRef(null);
 
   // Initialize socket and set up event handlers
   useEffect(() => {
-    if (isInitializedRef.current) return;
-    isInitializedRef.current = true;
-    
+    // Get stored credentials
     const operatorName = sessionStorage.getItem('operatorName');
     const operatorNumber = sessionStorage.getItem('operatorNumber');
     const operatorId = sessionStorage.getItem('operatorId');
+    const storedUser = sessionStorage.getItem('user');
 
+    // Check if we have the necessary credentials
     if (!operatorName || !operatorNumber) {
+      console.log('No stored operator credentials found, redirecting to login');
       navigate('/operator/login');
       return;
     }
 
-    const setupSocket = async () => {
-      // Set up message handler
-      setMessageHandler((message) => {
-        console.log('Message received in dashboard:', message);
+    // Check if user is authenticated as operator
+    if (!storedUser) {
+      console.log('No stored user found, redirecting to login');
+      navigate('/operator/login');
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(storedUser);
+      if (!parsedUser || parsedUser.role !== 'operator') {
+        console.log('User is not authenticated as operator, redirecting to login');
+        navigate('/operator/login');
+        return;
+      }
+    } catch (error) {
+      console.error('Error parsing stored user:', error);
+      navigate('/operator/login');
+      return;
+    }
+
+    // Define message handler
+    messageHandlerRef.current = (message) => {
+      console.log('Message received in dashboard:', message);
+      
+      // Handle typing indicator
+      if (message.type === 'typing') {
+        // Handle typing indicator if needed
+        return;
+      }
+      
+      // Handle regular message
+      setMessages(prevMessages => {
+        const clientId = message.clientId;
         
-        // Handle typing indicator
-        if (message.type === 'typing') {
-          // Handle typing indicator if needed
-          return;
+        // Initialize client messages array if it doesn't exist
+        if (!prevMessages[clientId]) {
+          prevMessages[clientId] = [];
         }
         
-        // Update messages state
-        setMessages(prevMessages => {
-          const clientId = message.clientId;
-          const clientMessages = [...(prevMessages[clientId] || [])];
-          
-          // Check if message already exists
-          const exists = clientMessages.some(m => m.messageId === message.messageId);
-          if (exists) return prevMessages;
-          
+        // Check if message already exists
+        const messageExists = prevMessages[clientId].some(
+          msg => msg.messageId === message.messageId
+        );
+        
+        if (!messageExists) {
           // Add new message
-          clientMessages.push(message);
-          
-          // Return updated messages
           return {
             ...prevMessages,
-            [clientId]: clientMessages
+            [clientId]: [...prevMessages[clientId], message].sort(
+              (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+            )
           };
+        }
+        
+        return prevMessages;
+      });
+    };
+    
+    // Define client list handler
+    clientListHandlerRef.current = (clients) => {
+      console.log('Active clients updated:', clients);
+      setActiveClients(clients);
+      
+      // If we have a selected client that's no longer active, deselect it
+      if (selectedClient && !clients.some(c => c.id === selectedClient.id)) {
+        setSelectedClient(null);
+      }
+    };
+    
+    // Define client queue handler
+    clientQueueHandlerRef.current = (queue) => {
+      console.log('Client queue updated:', queue);
+      setPendingClients(queue);
+    };
+    
+    // Define session handler
+    sessionHandlerRef.current = (sessionData) => {
+      console.log('Session update received in OperatorDashboard:', sessionData);
+      setIsLoading(false);
+      setIsConnected(true);
+      
+      // Handle operator data
+      if (sessionData.operator) {
+        // Update operator info if needed
+      }
+      
+      // Handle active rooms from reconnection
+      if (sessionData.activeRooms && Array.isArray(sessionData.activeRooms)) {
+        const clients = sessionData.activeRooms
+          .filter(room => room.client)
+          .map(room => room.client);
+          
+        if (clients.length > 0) {
+          setActiveClients(clients);
+        }
+        
+        // Initialize messages from active rooms
+        const messagesMap = {};
+        sessionData.activeRooms.forEach(room => {
+          if (room.client && room.messages) {
+            messagesMap[room.client.id] = room.messages.map(msg => ({
+              ...msg,
+              sentByOperator: msg.senderId === sessionData.operator.id
+            }));
+          }
         });
-      });
-      
-      // Set up session handler
-      setSessionHandler((sessionData) => {
-        console.log('Session update received in OperatorDashboard:', sessionData);
-      });
-      
-      // Set up client list handler
-      setClientListHandler((clients) => {
-        console.log('Active clients updated:', clients);
-        setActiveClients(clients);
-        operatorStorage.activeClients = clients;
-        operatorStorage.saveToStorage();
-      });
-      
-      // Set up client queue handler
-      setClientQueueHandler((queue) => {
-        console.log('Client queue updated:', queue);
-        setPendingClients(queue);
-        operatorStorage.pendingClients = queue;
-        operatorStorage.saveToStorage();
-      });
-      
-      // Try to reconnect with stored credentials
-      let socket;
-      
-      if (operatorId) {
-        // Try to reconnect with existing ID
-        socket = reconnectOperatorSocket();
         
-        // Set up connection error handler
-        if (socket) {
-          socket.on('connect_error', (error) => {
-            console.error('Reconnection error:', error);
-            
-            // If reconnection fails, try to initialize a new connection
-            socket = initOperatorSocket(operatorName, operatorNumber);
-          });
+        if (Object.keys(messagesMap).length > 0) {
+          setMessages(messagesMap);
         }
       }
       
-      // If no stored ID or reconnection failed, initialize a new connection
-      if (!socket) {
-        socket = initOperatorSocket(operatorName, operatorNumber);
+      // If we have active clients in the session data, update the state
+      if (sessionData.activeClients && Array.isArray(sessionData.activeClients)) {
+        setActiveClients(sessionData.activeClients);
       }
       
-      if (socket) {
-        // Request initial data
-        requestActiveClients();
-        requestClientQueue();
-        
-        // Load data from storage
-        const storedMessages = operatorStorage.messages || {};
-        if (Object.keys(storedMessages).length > 0) {
-          setMessages(storedMessages);
-        }
-        
-        const storedActiveClients = operatorStorage.activeClients || [];
-        if (storedActiveClients.length > 0) {
-          setActiveClients(storedActiveClients);
-        }
-        
-        const storedPendingClients = operatorStorage.pendingClients || [];
-        if (storedPendingClients.length > 0) {
-          setPendingClients(storedPendingClients);
-        }
-      } else {
-        // If connection failed, redirect to login
-        navigate('/operator/login');
+      // If we have pending clients in the session data, update the state
+      if (sessionData.pendingClients && Array.isArray(sessionData.pendingClients)) {
+        setPendingClients(sessionData.pendingClients);
       }
     };
     
-    setupSocket();
+    // Set up handlers
+    setMessageHandler(messageHandlerRef.current);
+    setClientListHandler(clientListHandlerRef.current);
+    setClientQueueHandler(clientQueueHandlerRef.current);
+    setSessionHandler(sessionHandlerRef.current);
     
-    // Clean up on unmount
+    // Attempt to reconnect with stored credentials
+    console.log('Attempting to reconnect operator with stored credentials:', { operatorName, operatorNumber, operatorId });
+    
+    // Use reconnectOperatorSocket instead of initOperatorSocket for existing sessions
+    reconnectOperatorSocket();
+    
+    // Request initial data
+    setTimeout(() => {
+      requestActiveClients();
+      requestClientQueue();
+    }, 1000);
+    
+    // Cleanup function
     return () => {
-      disconnectOperatorSocket();
+      // Clear handlers to prevent errors on unmount
+      setMessageHandler(null);
+      setClientListHandler(null);
+      setClientQueueHandler(null);
+      setSessionHandler(null);
     };
-  }, [navigate]);
+  }, [navigate, selectedClient]);
   
-  // Handle sending a message to a client
-  const handleSendMessage = (e) => {
-    e.preventDefault();
+  // Handle client selection
+  const handleClientSelect = (client) => {
+    setSelectedClient(client);
     
-    if (!selectedClient || !inputMessage.trim()) return;
-    
-    // Send message to client
-    const success = sendMessageToClient(selectedClient.id, inputMessage);
-    
-    if (success) {
-      // Add message to local state
-      const newMessage = {
-        messageId: `operator_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        text: inputMessage,
-        clientId: selectedClient.id,
-        sentByOperator: true,
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prevMessages => {
-        const clientMessages = [...(prevMessages[selectedClient.id] || []), newMessage];
-        return {
-          ...prevMessages,
-          [selectedClient.id]: clientMessages
-        };
-      });
-      
-      setInputMessage('');
+    // Load messages for this client if not already loaded
+    if (!messages[client.id]) {
+      // Try to load from storage first
+      const storedMessages = operatorStorage.messages[client.id];
+      if (storedMessages && storedMessages.length > 0) {
+        setMessages(prev => ({
+          ...prev,
+          [client.id]: storedMessages
+        }));
+      }
     }
   };
   
-  // Handle accepting a client from the queue
+  // Handle sending messages
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    
+    if (!inputMessage.trim() || !selectedClient || !isConnected) return;
+    
+    const messageObj = {
+      messageId: `op_${Date.now()}`,
+      clientId: selectedClient.id,
+      text: inputMessage.trim(),
+      timestamp: new Date().toISOString(),
+      sentByOperator: true
+    };
+    
+    // Add message to local state
+    setMessages(prev => ({
+      ...prev,
+      [selectedClient.id]: [...(prev[selectedClient.id] || []), messageObj]
+    }));
+    
+    // Send message to server
+    sendMessageToClient(selectedClient.id, {
+      text: inputMessage.trim(),
+      messageId: messageObj.messageId
+    });
+    
+    // Clear input
+    setInputMessage('');
+  };
+  
+  // Handle accepting clients from queue
   const handleAcceptClient = (client) => {
+    if (!isConnected) return;
+    
     acceptClient(client.id);
+    
+    // Remove from pending clients (optimistic update)
+    setPendingClients(prev => prev.filter(c => c.id !== client.id));
   };
   
-  // Handle selecting a client to chat with
-  const handleSelectClient = (client) => {
-    setSelectedClient(client);
+  // Handle logout
+  const handleLogout = () => {
+    disconnectOperatorSocket();
+    logout();
+    navigate('/operator/login');
   };
   
+  // Render dashboard
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r overflow-y-auto">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold">Operator Dashboard</h2>
-          <p className="text-sm text-gray-500">{user?.name || 'Operator'}</p>
-        </div>
-        
-        {/* Active Clients */}
-        <div className="p-4 border-b">
-          <h3 className="font-medium mb-2">Active Clients</h3>
-          <div className="space-y-2">
-            {activeClients.length > 0 ? (
-              activeClients.map(client => (
-                <div 
-                  key={client.id}
-                  className={`p-2 rounded cursor-pointer ${
-                    selectedClient?.id === client.id ? 'bg-blue-100' : 'hover:bg-gray-100'
-                  }`}
-                  onClick={() => handleSelectClient(client)}
-                >
-                  <div className="font-medium">{client.name}</div>
-                  <div className="text-xs text-gray-500">{client.number}</div>
-                </div>
-              ))
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      {/* Header */}
+      <header className="bg-white shadow-sm p-4 flex justify-between items-center">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-800">Operator Dashboard</h1>
+          <div className="text-sm text-gray-500">
+            {isConnected ? (
+              <span className="text-green-500 flex items-center">
+                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                Connected
+              </span>
             ) : (
-              <div className="text-sm text-gray-500">No active clients</div>
+              <span className="text-red-500 flex items-center">
+                <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                Disconnected
+              </span>
             )}
           </div>
         </div>
-        
-        {/* Pending Clients */}
-        <div className="p-4">
-          <h3 className="font-medium mb-2">Pending Clients</h3>
-          <div className="space-y-2">
-            {pendingClients.length > 0 ? (
-              pendingClients.map(client => (
-                <div 
-                  key={client.id}
-                  className="p-2 rounded bg-yellow-50 flex justify-between items-center"
-                >
-                  <div>
-                    <div className="font-medium">{client.name}</div>
-                    <div className="text-xs text-gray-500">{client.number}</div>
-                  </div>
-                  <button
-                    className="px-2 py-1 bg-blue-500 text-white text-xs rounded"
-                    onClick={() => handleAcceptClient(client)}
-                  >
-                    Accept
-                  </button>
-                </div>
-              ))
-            ) : (
-              <div className="text-sm text-gray-500">No pending clients</div>
-            )}
-          </div>
-        </div>
-      </div>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+        >
+          Logout
+        </button>
+      </header>
       
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {selectedClient ? (
-          <>
-            {/* Chat Header */}
-            <div className="p-4 bg-white border-b flex justify-between items-center">
-              <div>
-                <h3 className="font-medium">{selectedClient.name}</h3>
-                <p className="text-sm text-gray-500">{selectedClient.number}</p>
-              </div>
-            </div>
-            
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-              {(messages[selectedClient.id] || []).length > 0 ? (
-                (messages[selectedClient.id] || []).map((message, index) => (
-                  <div 
-                    key={index} 
-                    className={`mb-2 ${message.sentByOperator ? 'text-right' : 'text-left'}`}
-                  >
-                    <span className={`inline-block p-2 rounded ${
-                      message.sentByOperator 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-gray-200'
-                    }`}>
-                      {message.text}
-                    </span>
-                  </div>
-                ))
+      {/* Loading state */}
+      {isLoading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Connecting to server...</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex">
+          {/* Sidebar */}
+          <div className="w-64 bg-white border-r flex flex-col">
+            {/* Active clients */}
+            <div className="p-4 flex-1 overflow-y-auto border-b">
+              <h2 className="text-lg font-medium text-gray-700 mb-2">Active Clients</h2>
+              {activeClients.length > 0 ? (
+                <ul className="space-y-2">
+                  {activeClients.map(client => (
+                    <li 
+                      key={client.id}
+                      onClick={() => handleClientSelect(client)}
+                      className={`p-2 border rounded cursor-pointer ${
+                        selectedClient && selectedClient.id === client.id
+                          ? 'bg-blue-50 border-blue-200'
+                          : 'bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="font-medium">{client.name}</div>
+                      <div className="text-sm text-gray-500">{client.number}</div>
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                <div className="text-center text-gray-500 mt-4">
-                  No messages yet
-                </div>
+                <p className="text-gray-500 text-sm">No active clients</p>
               )}
             </div>
-
-            {/* Message Input */}
-            <form 
-              onSubmit={handleSendMessage} 
-              className="p-4 bg-white border-t flex"
-            >
-              <input 
-                type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Type a message..."
-                className="flex-1 p-2 border rounded-l-lg"
-              />
-              <button 
-                type="submit" 
-                className="bg-blue-500 text-white p-2 rounded-r-lg"
-              >
-                Send
-              </button>
-            </form>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            Select a client to start chatting
+            
+            {/* Pending clients */}
+            <div className="p-4 flex-1 overflow-y-auto">
+              <h2 className="text-lg font-medium text-gray-700 mb-2">Pending Clients</h2>
+              {pendingClients.length > 0 ? (
+                <ul className="space-y-2">
+                  {pendingClients.map(client => (
+                    <li key={client.id} className="p-2 border rounded bg-gray-50">
+                      <div className="font-medium">{client.name}</div>
+                      <div className="text-sm text-gray-500 mb-2">{client.number}</div>
+                      <button
+                        onClick={() => handleAcceptClient(client)}
+                        className="w-full px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
+                        disabled={!isConnected}
+                      >
+                        Accept
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500 text-sm">No pending clients</p>
+              )}
+            </div>
           </div>
-        )}
-      </div>
+          
+          {/* Chat area */}
+          <div className="flex-1 flex flex-col">
+            {selectedClient ? (
+              <>
+                {/* Chat header */}
+                <div className="p-4 bg-white border-b flex items-center">
+                  <div>
+                    <h2 className="font-medium">{selectedClient.name}</h2>
+                    <p className="text-sm text-gray-500">{selectedClient.number}</p>
+                  </div>
+                </div>
+                
+                {/* Messages */}
+                <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
+                  {messages[selectedClient.id] && messages[selectedClient.id].length > 0 ? (
+                    messages[selectedClient.id].map((message, index) => (
+                      <div 
+                        key={message.messageId || index}
+                        className={`flex mb-4 ${
+                          message.sentByOperator ? 'justify-end' : 'justify-start'
+                        }`}
+                      >
+                        <span className={`px-4 py-2 rounded-lg max-w-xs ${
+                          message.sentByOperator 
+                            ? 'bg-blue-500 text-white' 
+                            : 'bg-gray-200 text-gray-800'
+                        }`}>
+                          {message.text}
+                          <div className="text-xs mt-1 opacity-75">
+                            {new Date(message.timestamp).toLocaleTimeString()}
+                          </div>
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-500 mt-4">
+                      No messages yet
+                    </div>
+                  )}
+                </div>
+
+                {/* Message Input */}
+                <form 
+                  onSubmit={handleSendMessage} 
+                  className="p-4 bg-white border-t flex"
+                >
+                  <input 
+                    type="text"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    className="flex-1 p-2 border rounded-l-lg"
+                    disabled={!isConnected}
+                  />
+                  <button 
+                    type="submit" 
+                    className={`p-2 rounded-r-lg ${
+                      isConnected 
+                        ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                    disabled={!isConnected}
+                  >
+                    Send
+                  </button>
+                </form>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-gray-500">
+                Select a client to start chatting
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

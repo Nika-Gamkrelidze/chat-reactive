@@ -1,57 +1,75 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
-const AuthContext = createContext(null);
+const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const navigate = useNavigate();
-
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Check for existing user on mount
   useEffect(() => {
-    // Check authentication on app load
-    const checkAuth = () => {
-      const clientName = sessionStorage.getItem('clientName');
-      const clientNumber = sessionStorage.getItem('clientNumber');
-      const operatorName = sessionStorage.getItem('operatorName');
-      const operatorNumber = sessionStorage.getItem('operatorNumber');
-
-      if (clientName && clientNumber) {
-        setUser({ type: 'client', name: clientName, number: clientNumber });
-      } else if (operatorName && operatorNumber) {
-        setUser({ type: 'operator', name: operatorName, number: operatorNumber });
+    // Check if we have user data in session storage
+    const checkExistingAuth = () => {
+      const storedUser = sessionStorage.getItem('user');
+      
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+          setIsAuthenticated(true);
+        } catch (error) {
+          console.error('Error parsing stored user:', error);
+          sessionStorage.removeItem('user');
+        }
       }
+      
+      setIsLoading(false);
     };
-
-    checkAuth();
+    
+    checkExistingAuth();
   }, []);
-
-  const login = (userData, type) => {
-    if (type === 'client') {
-      setUser({ type: 'client', ...userData });
-      navigate('/client/chat');
-    } else if (type === 'operator') {
-      setUser({ type: 'operator', ...userData });
-      navigate('/operator/dashboard');
+  
+  // Login function
+  const login = (userData) => {
+    setUser(userData);
+    setIsAuthenticated(true);
+    sessionStorage.setItem('user', JSON.stringify(userData));
+  };
+  
+  // Logout function
+  const logout = () => {
+    setUser(null);
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('user');
+    
+    // Clear operator/client specific data
+    if (sessionStorage.getItem('operatorName')) {
+      // Use the clearAll method from operatorStorage
+      const { clearOperatorData } = require('../services/socket/operatorSocket');
+      clearOperatorData();
+    }
+    
+    if (sessionStorage.getItem('clientName')) {
+      sessionStorage.removeItem('clientName');
+      sessionStorage.removeItem('clientNumber');
+      sessionStorage.removeItem('clientId');
+      sessionStorage.removeItem('clientActiveOperator');
+      sessionStorage.removeItem('clientMessages');
     }
   };
-
-  const logout = () => {
-    sessionStorage.clear();
-    setUser(null);
-    navigate('/');
+  
+  const value = {
+    user,
+    isAuthenticated,
+    isLoading,
+    login,
+    logout
   };
+  
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}; 
+export function useAuth() {
+  return useContext(AuthContext);
+} 

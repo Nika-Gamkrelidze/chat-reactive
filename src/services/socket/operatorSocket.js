@@ -109,6 +109,19 @@ export const operatorStorage = {
     sessionStorage.removeItem('operatorMessages');
     sessionStorage.removeItem('operatorName');
     sessionStorage.removeItem('operatorNumber');
+  },
+  
+  // Clear all operator data including login credentials
+  clearAll: function() {
+    this.clear();
+    
+    try {
+      sessionStorage.removeItem('operatorId');
+      sessionStorage.removeItem('operatorName');
+      sessionStorage.removeItem('operatorNumber');
+    } catch (error) {
+      console.error('Error clearing all operator data from session storage:', error);
+    }
   }
 };
 
@@ -120,11 +133,11 @@ export const createOperatorSocket = () => {
     socket = io(config.server.namespaceUrl, {
       autoConnect: false,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
-      transports: ['websocket']
+      transports: ['websocket', 'polling'] // Add polling as fallback
     });
     
     // Add logging for socket events if debug is enabled
@@ -155,31 +168,79 @@ export const createOperatorSocket = () => {
       console.log(`Operator disconnected from server: ${reason}`);
     });
     
+    socket.on('connect_error', (error) => {
+      console.error('Operator socket connection error:', error);
+    });
+    
     // Handle session establishment
     socket.on('session', (data) => {
       console.log('Operator session established with data:', data);
-      
-      // Clear existing data first
-      operatorStorage.clear();
       
       // Update storage with new session data
       operatorStorage.updateFromSession(data);
       
       // Update socket auth with new operator ID if available
       if (data.operator && data.operator.id) {
-        socket.auth.operatorId = data.operator.id;
-        sessionStorage.setItem('operatorId', data.operator.id);
-      }
-      
-      // Store operator name and number
-      if (socket.auth.name && socket.auth.number) {
-        sessionStorage.setItem('operatorName', socket.auth.name);
-        sessionStorage.setItem('operatorNumber', socket.auth.number);
+        socket.auth.userId = data.operator.id;
       }
       
       // Call session handler if defined
       if (sessionHandler && typeof sessionHandler === 'function') {
         sessionHandler(data);
+      }
+    });
+    
+    // Handle session reconnection
+    socket.on('session-reconnect', (data) => {
+      console.log('Operator session reconnected with data:', data);
+      
+      // Update storage with reconnection data
+      operatorStorage.updateFromSession(data);
+      
+      // Call session handler if defined
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler(data);
+      }
+    });
+    
+    // Handle room assignment
+    socket.on('room_assigned', (data) => {
+      console.log('Room assigned to operator:', data);
+      
+      if (data && data.client && data.roomId) {
+        // Add client to active clients if not already there
+        const clientExists = operatorStorage.activeClients.some(c => c.id === data.client.id);
+        
+        if (!clientExists) {
+          operatorStorage.activeClients.push(data.client);
+          operatorStorage.saveToStorage();
+        }
+        
+        // Initialize messages array for this client if needed
+        if (!operatorStorage.messages[data.client.id]) {
+          operatorStorage.messages[data.client.id] = [];
+        }
+        
+        // Add initial messages if provided
+        if (data.messages && Array.isArray(data.messages)) {
+          // Add only messages that don't already exist
+          data.messages.forEach(message => {
+            const exists = operatorStorage.messages[data.client.id].some(
+              m => m.messageId === message.messageId
+            );
+            
+            if (!exists) {
+              operatorStorage.messages[data.client.id].push(message);
+            }
+          });
+          
+          operatorStorage.saveToStorage();
+        }
+        
+        // Call client list handler if defined
+        if (clientListHandler && typeof clientListHandler === 'function') {
+          clientListHandler(operatorStorage.activeClients);
+        }
       }
     });
     
@@ -290,6 +351,9 @@ export const reconnectOperatorSocket = () => {
     // Create socket instance if not already created
     if (!socket) {
       createOperatorSocket();
+    } else if (socket.connected) {
+      // If already connected, disconnect first to reset state
+      socket.disconnect();
     }
     
     // Set authentication data with stored credentials
@@ -303,9 +367,7 @@ export const reconnectOperatorSocket = () => {
     console.log(`Reconnecting to socket server as operator with name: ${name}, number: ${number}, and userId: ${operatorId || 'null'}`);
     
     // Connect to the server
-    if (!socket.connected) {
-      socket.connect();
-    }
+    socket.connect();
     
     return socket;
   }
@@ -318,6 +380,9 @@ export const setSessionHandler = (handler) => {
   if (handler && typeof handler === 'function') {
     console.log('Setting operator session handler');
     sessionHandler = handler;
+  } else if (handler === null) {
+    // Allow null to clear the handler
+    sessionHandler = null;
   } else {
     console.error('Invalid session handler provided:', handler);
   }
@@ -326,6 +391,9 @@ export const setSessionHandler = (handler) => {
 export const setMessageHandler = (handler) => {
   if (handler && typeof handler === 'function') {
     messageHandler = handler;
+  } else if (handler === null) {
+    // Allow null to clear the handler
+    messageHandler = null;
   } else {
     console.error('Invalid message handler provided:', handler);
   }
@@ -334,6 +402,9 @@ export const setMessageHandler = (handler) => {
 export const setClientListHandler = (handler) => {
   if (handler && typeof handler === 'function') {
     clientListHandler = handler;
+  } else if (handler === null) {
+    // Allow null to clear the handler
+    clientListHandler = null;
   } else {
     console.error('Invalid client list handler provided:', handler);
   }
@@ -342,6 +413,9 @@ export const setClientListHandler = (handler) => {
 export const setClientQueueHandler = (handler) => {
   if (handler && typeof handler === 'function') {
     clientQueueHandler = handler;
+  } else if (handler === null) {
+    // Allow null to clear the handler
+    clientQueueHandler = null;
   } else {
     console.error('Invalid client queue handler provided:', handler);
   }
@@ -399,5 +473,10 @@ export const sendTypingStatus = (clientId, isTyping) => {
 
 // Clear all operator data
 export const clearOperatorData = () => {
-  operatorStorage.clear();
+  operatorStorage.clearAll();
+};
+
+// Get operator socket instance
+export const getOperatorSocket = () => {
+  return socket;
 };

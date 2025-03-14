@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { initOperatorSocket, setSessionHandler } from '../../services/socket/operatorSocket';
@@ -8,8 +8,34 @@ function OperatorLogin() {
   const [number, setNumber] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionReceived, setSessionReceived] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
+  
+  useEffect(() => {
+    // Check if already logged in
+    const operatorName = sessionStorage.getItem('operatorName');
+    const operatorNumber = sessionStorage.getItem('operatorNumber');
+    const storedUser = sessionStorage.getItem('user');
+    
+    if (operatorName && operatorNumber && storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        if (user && user.role === 'operator') {
+          navigate('/operator/dashboard', { replace: true });
+        }
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
+      }
+    }
+  }, [navigate]);
+  
+  // Handle navigation after session is received
+  useEffect(() => {
+    if (sessionReceived) {
+      navigate('/operator/dashboard', { replace: true });
+    }
+  }, [sessionReceived, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,63 +48,52 @@ function OperatorLogin() {
         console.log('Session data received:', sessionData);
         
         // Store operator data in session storage
-        sessionStorage.setItem('operatorName', username);
-        sessionStorage.setItem('operatorNumber', number);
-        
-        if (sessionData && sessionData.operator && sessionData.operator.id) {
+        if (sessionData.operator) {
           sessionStorage.setItem('operatorId', sessionData.operator.id);
+          sessionStorage.setItem('operatorName', username);
+          sessionStorage.setItem('operatorNumber', number);
+          
+          // Login in auth context with correct role
+          login({
+            id: sessionData.operator.id,
+            name: username,
+            number: number,
+            role: 'operator'  // Make sure role is set correctly
+          });
+          
+          console.log('Session received, will navigate to dashboard...');
+          
+          // Set state to trigger navigation in the useEffect
+          setSessionReceived(true);
         }
-        
-        // Update auth context
-        login({
-          name: username,
-          number: number,
-          type: 'operator',
-          operatorId: sessionData.operator?.id
-        });
-        
-        // Add a small delay to ensure storage is updated
-        setTimeout(() => {
-          // Navigate to dashboard
-          console.log('Navigating to dashboard...');
-          navigate('/operator/dashboard', { replace: true });
-        }, 100);
       });
       
       // Initialize socket connection
-      const socket = initOperatorSocket(username, number);
+      initOperatorSocket(username, number);
       
-      // Handle connection error
-      socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
-        setError('Failed to connect: ' + error.message);
-        setIsLoading(false);
-      });
-      
+      // Note: We don't navigate here - we wait for the session event
     } catch (error) {
-      setError('Failed to connect. Please try again.');
       console.error('Login error:', error);
+      setError('Failed to connect. Please try again.');
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-secondary-50 to-primary-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-soft p-8">
-        <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">
-          Operator Login
-        </h2>
+        <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">Operator Login</h1>
         
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
-              {error}
-            </div>
-          )}
-          
-          <div className="space-y-2">
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-              Username
+        {error && (
+          <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+            {error}
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+              Name
             </label>
             <input
               type="text"
@@ -86,14 +101,14 @@ function OperatorLogin() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-secondary-400 focus:border-transparent transition-all outline-none"
-              placeholder="Enter your username"
+              placeholder="Enter your name"
               required
               disabled={isLoading}
             />
           </div>
           
-          <div className="space-y-2">
-            <label htmlFor="number" className="block text-sm font-medium text-gray-700">
+          <div className="mb-6">
+            <label htmlFor="number" className="block text-sm font-medium text-gray-700 mb-1">
               Number
             </label>
             <input

@@ -357,7 +357,8 @@ export const sendClientMessage = (message) => {
   if (socket && socket.connected) {
     const messageData = {
       text: message,
-      timestamp: new Date().toISOString()
+      senderId: clientStorage.client.id,
+      roomId: clientStorage.roomId
     };
     
     socket.emit('send_message', messageData);
