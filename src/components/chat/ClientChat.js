@@ -22,6 +22,8 @@ function ClientChat() {
   const typingTimeoutRef = useRef(null);
   const socketInitializedRef = useRef(false);
   const navigate = useNavigate();
+  const [roomId, setRoomId] = useState(null);
+  const [clientInfo, setClientInfo] = useState(null);
   
   // Get client info from session storage
   const clientName = sessionStorage.getItem('clientName');
@@ -71,7 +73,17 @@ function ClientChat() {
       
       // Update room ID if available
       if (sessionData.roomId) {
-        // Room ID is already stored in sessionStorage by the socket service
+        console.log('Setting room ID:', sessionData.roomId);
+        setRoomId(sessionData.roomId);
+        // Also store in session storage for persistence
+        sessionStorage.setItem('roomId', sessionData.roomId);
+      } else {
+        // Try to get room ID from session storage if not in session data
+        const storedRoomId = sessionStorage.getItem('roomId');
+        if (storedRoomId) {
+          console.log('Using stored room ID:', storedRoomId);
+          setRoomId(storedRoomId);
+        }
       }
       
       // Load messages if available
@@ -153,27 +165,21 @@ function ClientChat() {
     
     if (!inputMessage.trim() || !isConnected) return;
     
-    // Send message to server
-    const success = sendClientMessage(inputMessage);
+    // Get current room ID
+    const currentRoomId = roomId || sessionStorage.getItem('roomId');
     
-    if (success) {
-      // Add message to local state
-      const newMessage = {
-        messageId: `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        text: inputMessage,
-        sender: 'client',
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages(prevMessages => [...prevMessages, newMessage]);
-      setInputMessage('');
-      
-      // Clear typing indicator
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        sendClientTypingStatus(false);
-      }
+    if (!currentRoomId) {
+      console.error('Cannot send message: room ID not available');
+      return;
     }
+    
+    console.log('Sending message with room ID:', currentRoomId);
+    
+    // Send message
+    sendClientMessage(inputMessage.trim(), currentRoomId);
+    
+    // Clear input
+    setInputMessage('');
   };
   
   // Handle input change and typing indicator

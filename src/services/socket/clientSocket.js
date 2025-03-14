@@ -352,20 +352,57 @@ export const getClientSocket = () => {
   return socket;
 };
 
-// Send a message to the operator
-export const sendClientMessage = (message) => {
-  if (socket && socket.connected) {
-    const messageData = {
-      text: message,
-      senderId: clientStorage.client.id,
-      roomId: clientStorage.roomId
-    };
-    
-    socket.emit('send_message', messageData);
-    
-    return true;
+// Send message to operator
+export const sendClientMessage = (text, roomId) => {
+  if (!socket || !socket.connected) {
+    console.error('Cannot send message: socket not connected');
+    return false;
   }
-  return false;
+  
+  const clientId = clientStorage.clientId || sessionStorage.getItem('clientId');
+  
+  if (!clientId) {
+    console.error('Cannot send message: client ID not available');
+    return false;
+  }
+  
+  if (!roomId) {
+    console.error('Cannot send message: room ID not provided');
+    return false;
+  }
+  
+  const messageData = {
+    text,
+    roomId,
+    senderId: clientId
+  };
+  
+  // Generate a temporary message ID for tracking
+  const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Create a temporary message object for local display
+  const tempMessage = {
+    messageId: tempMessageId,
+    roomId,
+    senderId: clientId,
+    text,
+    timestamp: new Date().toISOString(),
+    isPending: true,
+    sentByOperator: false
+  };
+  
+  // Add to client storage
+  clientStorage.addMessage(tempMessage);
+  
+  // Call message handler if defined
+  if (messageHandler && typeof messageHandler === 'function') {
+    messageHandler(tempMessage);
+  }
+  
+  // Emit message event with the correct event name
+  socket.emit('send_message', messageData);
+  
+  return tempMessageId;
 };
 
 // Send typing indicator to the operator

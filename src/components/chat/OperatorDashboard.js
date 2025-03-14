@@ -221,31 +221,24 @@ function OperatorDashboard() {
     }
   };
   
-  // Handle sending messages
+  // Handle sending a message
   const handleSendMessage = (e) => {
     e.preventDefault();
     
-    if (!inputMessage.trim() || !selectedClient || !isConnected) return;
+    if (!inputMessage.trim() || !selectedClient || !isConnected) {
+      return;
+    }
     
-    const messageObj = {
-      messageId: `op_${Date.now()}`,
-      clientId: selectedClient.id,
-      text: inputMessage.trim(),
-      timestamp: new Date().toISOString(),
-      sentByOperator: true
-    };
+    // Get room ID from the selected client
+    const roomId = selectedClient.roomId;
     
-    // Add message to local state
-    setMessages(prev => ({
-      ...prev,
-      [selectedClient.id]: [...(prev[selectedClient.id] || []), messageObj]
-    }));
+    if (!roomId) {
+      console.error('Cannot send message: room ID not available');
+      return;
+    }
     
-    // Send message to server
-    sendMessageToClient(selectedClient.id, {
-      text: inputMessage.trim(),
-      messageId: messageObj.messageId
-    });
+    // Send message with the correct parameters (clientId, text, roomId)
+    sendMessageToClient(selectedClient.id, inputMessage.trim(), roomId);
     
     // Clear input
     setInputMessage('');

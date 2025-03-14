@@ -444,15 +444,68 @@ export const requestActiveClients = () => {
 };
 
 // Send message to client
-export const sendMessageToClient = (clientId, message) => {
-  if (socket && socket.connected) {
-    socket.emit('send_message_to_client', {
-      clientId,
-      message
-    });
-    return true;
+export const sendMessageToClient = (clientId, text, roomId) => {
+  if (!socket || !socket.connected) {
+    console.error('Cannot send message: socket not connected');
+    return false;
   }
-  return false;
+  
+  const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+  
+  if (!operatorId) {
+    console.error('Cannot send message: operator ID not available');
+    return false;
+  }
+  
+  if (!clientId) {
+    console.error('Cannot send message: client ID not provided');
+    return false;
+  }
+  
+  if (!roomId) {
+    console.error('Cannot send message: room ID not provided');
+    return false;
+  }
+  
+  const messageData = {
+    text,
+    roomId,
+    senderId: operatorId,
+    receiverId: clientId
+  };
+  
+  // Generate a temporary message ID for tracking
+  const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Create a temporary message object for local display
+  const tempMessage = {
+    messageId: tempMessageId,
+    roomId,
+    senderId: operatorId,
+    receiverId: clientId,
+    text,
+    timestamp: new Date().toISOString(),
+    isPending: true,
+    sentByOperator: true
+  };
+  
+  // Add to operator storage
+  if (!operatorStorage.messages[clientId]) {
+    operatorStorage.messages[clientId] = [];
+  }
+  
+  operatorStorage.messages[clientId].push(tempMessage);
+  operatorStorage.saveToStorage();
+  
+  // Call message handler if defined
+  if (messageHandler && typeof messageHandler === 'function') {
+    messageHandler(tempMessage);
+  }
+  
+  // Emit message event with the correct event name
+  socket.emit('send_message', messageData);
+  
+  return tempMessageId;
 };
 
 // Accept client from queue
