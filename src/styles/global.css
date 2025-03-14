@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Any global styles you want to add */
+body {
+  @apply antialiased;
+}

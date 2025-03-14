@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import config from '../config/env';
+import config from '../../config/env';
 
 let socket = null;
 let messageHandler = null;

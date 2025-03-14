@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { 
   initClientSocket, 
   setClientMessageHandler, 
@@ -10,9 +11,8 @@ import {
   joinClientRoom,
   reconnectClientSocket,
   isClientRegistered
-} from '../services/clientSocket';
+} from '../../services/socket/clientSocket';
 import { FiSend, FiUser } from 'react-icons/fi';
-import './ClientChat.css';
 
 function ClientChat() {
   const [messages, setMessages] = useState([]);

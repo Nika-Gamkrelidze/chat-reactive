@@ -1,60 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { initOperatorSocket, isOperatorRegistered } from '../services/operatorSocket';
-import './OperatorLogin.css';
+import { useAuth } from '../../context/AuthContext';
+import { initOperatorSocket } from '../../services/socket/operatorSocket';
 
 function OperatorLogin() {
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [number, setNumber] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   useEffect(() => {
-    // Only check registration if we don't have credentials in session storage
-    if (!sessionStorage.getItem('operatorName')) {
-      const checkRegistration = async () => {
-        const isRegistered = await isOperatorRegistered();
-        if (isRegistered) {
-          navigate('/operator/dashboard', { replace: true });
-        }
-      };
-      checkRegistration();
+    // Check if operator is already registered in session
+    const operatorName = sessionStorage.getItem('operatorName');
+    const operatorNumber = sessionStorage.getItem('operatorNumber');
+    
+    if (operatorName && operatorNumber) {
+      navigate('/operator/dashboard');
     }
   }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!name.trim() || !number.trim()) {
-      setError('Please enter both name and number');
-      return;
-    }
+    setError('');
 
     try {
-      // Store credentials first
-      sessionStorage.setItem('operatorName', name);
-      sessionStorage.setItem('operatorNumber', number);
-      
-      // Initialize socket connection
-      const socket = initOperatorSocket(name, number);
+      // Attempt socket connection
+      const socket = await initOperatorSocket(username, number);
       
       if (socket) {
-        // Wait for socket to connect before navigating
-        socket.on('connect', () => {
-          navigate('/operator/dashboard', { replace: true });
+        // Set up a one-time listener for session confirmation
+        socket.once('session', (sessionData) => {
+          if (sessionData.operatorId) {
+            // Store operator details in session storage
+            sessionStorage.setItem('operatorId', sessionData.operatorId);
+            sessionStorage.setItem('operatorName', sessionData.name);
+            sessionStorage.setItem('operatorNumber', sessionData.number);
+
+            // Log in and redirect
+            login({ 
+              name: sessionData.name, 
+              number: sessionData.number, 
+              id: sessionData.operatorId 
+            }, 'operator');
+            
+            navigate('/operator/dashboard');
+          }
         });
-        
-        socket.connect();
-      } else {
-        setError('Failed to create socket connection');
-        sessionStorage.removeItem('operatorName');
-        sessionStorage.removeItem('operatorNumber');
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      setError('Failed to connect to chat server');
-      sessionStorage.removeItem('operatorName');
-      sessionStorage.removeItem('operatorNumber');
+    } catch (err) {
+      setError('Login failed. Please check your credentials.');
+      console.error('Login error:', err);
     }
   };
 
@@ -80,8 +76,8 @@ function OperatorLogin() {
             <input
               type="text"
               id="username"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-secondary-400 focus:border-transparent transition-all outline-none"
               placeholder="Enter your username"
               required
@@ -89,16 +85,16 @@ function OperatorLogin() {
           </div>
           
           <div className="space-y-2">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
+            <label htmlFor="number" className="block text-sm font-medium text-gray-700">
+              Number
             </label>
             <input
               type="text"
-              id="password"
+              id="number"
               value={number}
               onChange={(e) => setNumber(e.target.value)}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-secondary-400 focus:border-transparent transition-all outline-none"
-              placeholder="Enter your password"
+              placeholder="Enter your number"
               required
             />
           </div>
