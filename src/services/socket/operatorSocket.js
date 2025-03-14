@@ -428,7 +428,7 @@ export const disconnectOperatorSocket = () => {
 // Request client queue
 export const requestClientQueue = () => {
   if (socket && socket.connected) {
-    socket.emit('get_client_queue');
+    // socket.emit('get_client_queue');
     return true;
   }
   return false;
@@ -437,7 +437,7 @@ export const requestClientQueue = () => {
 // Request active clients
 export const requestActiveClients = () => {
   if (socket && socket.connected) {
-    socket.emit('get_active_clients');
+    // socket.emit('get_active_clients');
     return true;
   }
   return false;
