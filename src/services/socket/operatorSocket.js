@@ -467,7 +467,7 @@ export const acceptClient = (clientId) => {
 // Send typing indicator to client
 export const sendTypingStatus = (clientId, isTyping) => {
   if (socket && socket.connected) {
-    socket.emit('operator-typing', { clientId, isTyping });
+    // socket.emit('operator-typing', { clientId, isTyping });
   }
 };
 
