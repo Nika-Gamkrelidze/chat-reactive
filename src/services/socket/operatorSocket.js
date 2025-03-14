@@ -27,7 +27,7 @@ export const operatorStorage = {
       this.operatorId = sessionData.operatorId;
     }
     
-    // Save to localStorage for persistence
+    // Save to sessionStorage for persistence
     this.saveToStorage();
     
     return this;
@@ -59,35 +59,35 @@ export const operatorStorage = {
     return false;
   },
   
-  // Save data to localStorage
+  // Save data to sessionStorage
   saveToStorage: function() {
     try {
-      localStorage.setItem('operatorData', JSON.stringify(this.operator));
-      localStorage.setItem('operatorId', this.operatorId);
-      localStorage.setItem('operatorMessages', JSON.stringify(this.messages));
-      localStorage.setItem('operatorActiveClients', JSON.stringify(this.activeClients));
-      localStorage.setItem('operatorPendingClients', JSON.stringify(this.pendingClients));
+      sessionStorage.setItem('operatorData', JSON.stringify(this.operator));
+      sessionStorage.setItem('operatorId', this.operatorId);
+      sessionStorage.setItem('activeClients', JSON.stringify(this.activeClients));
+      sessionStorage.setItem('pendingClients', JSON.stringify(this.pendingClients));
+      sessionStorage.setItem('operatorMessages', JSON.stringify(this.messages));
     } catch (e) {
-      console.error('Error saving operator data to localStorage:', e);
+      console.error('Error saving to sessionStorage:', e);
     }
   },
   
-  // Load data from localStorage
+  // Load data from sessionStorage
   loadFromStorage: function() {
     try {
-      const operatorData = localStorage.getItem('operatorData');
-      const operatorId = localStorage.getItem('operatorId');
-      const messages = localStorage.getItem('operatorMessages');
-      const activeClients = localStorage.getItem('operatorActiveClients');
-      const pendingClients = localStorage.getItem('operatorPendingClients');
-
+      const operatorData = sessionStorage.getItem('operatorData');
+      const operatorId = sessionStorage.getItem('operatorId');
+      const activeClients = sessionStorage.getItem('activeClients');
+      const pendingClients = sessionStorage.getItem('pendingClients');
+      const messages = sessionStorage.getItem('operatorMessages');
+      
       if (operatorData) this.operator = JSON.parse(operatorData);
       if (operatorId) this.operatorId = operatorId;
-      if (messages) this.messages = JSON.parse(messages);
       if (activeClients) this.activeClients = JSON.parse(activeClients);
       if (pendingClients) this.pendingClients = JSON.parse(pendingClients);
-    } catch (error) {
-      console.error('Error loading operator storage:', error);
+      if (messages) this.messages = JSON.parse(messages);
+    } catch (e) {
+      console.error('Error loading from sessionStorage:', e);
     }
     
     return this;
@@ -101,43 +101,19 @@ export const operatorStorage = {
     this.pendingClients = [];
     this.messages = {};
     
-    try {
-      localStorage.removeItem('operatorData');
-      localStorage.removeItem('operatorId');
-      localStorage.removeItem('operatorMessages');
-      localStorage.removeItem('operatorActiveClients');
-      localStorage.removeItem('operatorPendingClients');
-      sessionStorage.removeItem('operatorName');
-      sessionStorage.removeItem('operatorNumber');
-      sessionStorage.removeItem('operatorId');
-    } catch (e) {
-      console.error('Error clearing operator data from localStorage:', e);
-    }
-    
-    return this;
+    // Clear sessionStorage
+    sessionStorage.removeItem('operatorData');
+    sessionStorage.removeItem('operatorId');
+    sessionStorage.removeItem('activeClients');
+    sessionStorage.removeItem('pendingClients');
+    sessionStorage.removeItem('operatorMessages');
+    sessionStorage.removeItem('operatorName');
+    sessionStorage.removeItem('operatorNumber');
   }
 };
 
 // Create socket instance without connecting
-export const createOperatorSocket = (msgHandler = null, sessionHandler = null, clientListHandler = null, clientQueueHandler = null) => {
-  // Set handlers if provided
-  if (msgHandler && typeof msgHandler === 'function') {
-    messageHandler = msgHandler;
-  }
-  
-  if (sessionHandler && typeof sessionHandler === 'function') {
-    sessionHandler = sessionHandler;
-  }
-  
-  if (clientListHandler && typeof clientListHandler === 'function') {
-    clientListHandler = clientListHandler;
-  }
-  
-  if (clientQueueHandler && typeof clientQueueHandler === 'function') {
-    clientQueueHandler = clientQueueHandler;
-  }
-  
-  // Create socket instance if not already created
+export const createOperatorSocket = () => {
   if (!socket) {
     console.log(`Creating socket instance for operator at: ${config.server.namespaceUrl}`);
     
@@ -148,91 +124,65 @@ export const createOperatorSocket = (msgHandler = null, sessionHandler = null, c
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
-      transports: ['websocket'],
-      path: '/socket.io/',
+      transports: ['websocket']
     });
     
-    // Enable Socket.IO debugging if needed
+    // Add logging for socket events if debug is enabled
     if (DEBUG_SOCKET) {
-      // Only enable socket.io debug in development
-      if (process.env.NODE_ENV !== 'production') {
-        sessionStorage.setItem('debug', 'socket.io-client:*');
-      }
-    }
-    
-    // Add a custom logger for all socket events
-    if (DEBUG_SOCKET) {
-      // Create a dedicated logger for socket events
-      const socketLogger = (type, ...args) => {
-        const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
-        console.groupCollapsed(`%c Operator Socket.IO [${timestamp}] ${type}`, 'color: #2980b9; font-weight: bold;');
-        console.log('Event:', ...args);
-        console.groupEnd();
-      };
-
       // Log all incoming events
       socket.onAny((event, ...args) => {
-        socketLogger('RECEIVE', event, ...args);
+        console.groupCollapsed(`%c Operator Socket.IO RECEIVE`, 'color: #2ecc71; font-weight: bold;');
+        console.log('Event:', event, ...args);
+        console.groupEnd();
       });
-      
+
       // Add outgoing event logging
       const originalEmit = socket.emit;
       socket.emit = function(event, ...args) {
-        socketLogger('SEND', event, ...args);
+        console.groupCollapsed(`%c Operator Socket.IO SEND`, 'color: #e74c3c; font-weight: bold;');
+        console.log('Event:', event, ...args);
+        console.groupEnd();
         return originalEmit.apply(this, [event, ...args]);
       };
     }
-
-    // Connection events
+    
+    // Handle connection events
     socket.on('connect', () => {
-      console.log('Operator connected to server with ID:', socket.id);
+      console.log(`Operator connected to server with ID: ${socket.id}`);
     });
-
+    
     socket.on('disconnect', (reason) => {
-      console.log('Operator disconnected from server:', reason);
+      console.log(`Operator disconnected from server: ${reason}`);
     });
-
-    socket.on('connect_error', (error) => {
-      console.error('Operator connection error:', error.message);
-    });
-
-    socket.on('error', (error) => {
-      console.error('Socket error:', error);
-    });
-
+    
     // Handle session establishment
     socket.on('session', (data) => {
       console.log('Operator session established with data:', data);
       
-      // Store session data
-      if (data.operator) {
-        operatorStorage.operator = data.operator;
-      }
+      // Update operator storage with session data
+      operatorStorage.updateFromSession(data);
       
+      // Store operator ID in session storage
       if (data.operatorId) {
-        operatorStorage.operatorId = data.operatorId;
         sessionStorage.setItem('operatorId', data.operatorId);
       }
       
-      // Save to storage
-      operatorStorage.saveToStorage();
-      
-      // Notify through session handler if provided
+      // Call session handler if defined
       if (sessionHandler && typeof sessionHandler === 'function') {
         sessionHandler(data);
       }
     });
     
     // Handle client list updates
-    socket.on('client_list', (data) => {
-      console.log('Received client list:', data);
+    socket.on('active_clients', (data) => {
+      console.log('Received active clients:', data);
       
-      if (data && Array.isArray(data)) {
-        operatorStorage.activeClients = data;
+      if (data && data.clients) {
+        operatorStorage.activeClients = data.clients;
         operatorStorage.saveToStorage();
         
         if (clientListHandler && typeof clientListHandler === 'function') {
-          clientListHandler(data);
+          clientListHandler(data.clients);
         }
       }
     });
@@ -241,26 +191,45 @@ export const createOperatorSocket = (msgHandler = null, sessionHandler = null, c
     socket.on('client_queue', (data) => {
       console.log('Received client queue:', data);
       
-      if (data && data.pendingClients) {
-        operatorStorage.pendingClients = data.pendingClients;
+      if (data && data.queue) {
+        operatorStorage.pendingClients = data.queue;
         operatorStorage.saveToStorage();
         
         if (clientQueueHandler && typeof clientQueueHandler === 'function') {
-          clientQueueHandler(data);
+          clientQueueHandler(data.queue);
         }
       }
     });
     
     // Handle incoming messages
-    socket.on('message', (data) => {
-      console.log('Operator received message:', data);
+    socket.on('message_from_client', (data) => {
+      console.log('Received message from client:', data);
       
-      if (data) {
-        operatorStorage.addMessage(data);
+      if (data && data.clientId && data.message) {
+        const messageObj = {
+          messageId: data.message.messageId || `client_${Date.now()}`,
+          clientId: data.clientId,
+          text: data.message.text,
+          timestamp: data.message.timestamp || new Date().toISOString(),
+          sentByOperator: false
+        };
+        
+        operatorStorage.addMessage(messageObj);
         
         if (messageHandler && typeof messageHandler === 'function') {
-          messageHandler(data);
+          messageHandler(messageObj);
         }
+      }
+    });
+    
+    // Handle client typing indicator
+    socket.on('client-typing', (data) => {
+      if (messageHandler && typeof messageHandler === 'function') {
+        messageHandler({
+          type: 'typing',
+          clientId: data.clientId,
+          isTyping: data.isTyping
+        });
       }
     });
   }
@@ -269,24 +238,25 @@ export const createOperatorSocket = (msgHandler = null, sessionHandler = null, c
 };
 
 // Initialize socket connection with operator credentials
-export const initOperatorSocket = (name, number, operatorId = null) => {
-  // Load any existing data from storage
-  operatorStorage.loadFromStorage();
-  
+export const initOperatorSocket = (username, number, operatorId = null) => {
   // Create socket instance if not already created
   if (!socket) {
     createOperatorSocket();
   }
   
+  // Store operator credentials
+  sessionStorage.setItem('operatorName', username);
+  sessionStorage.setItem('operatorNumber', number);
+  
   // Set authentication data
   socket.auth = {
-    name: name,
+    name: username,
     number: number,
-    operatorId: operatorId, // Include operatorId if available
+    operatorId: operatorId || sessionStorage.getItem('operatorId'),
     type: "operator"
   };
   
-  console.log(`Connecting to socket server as operator with name: ${name} and number: ${number}`);
+  console.log(`Connecting to socket server as operator with name: ${username} and number: ${number} and operatorId: ${operatorId || 'null'}`);
   
   // Connect to the server
   if (!socket.connected) {
@@ -296,7 +266,7 @@ export const initOperatorSocket = (name, number, operatorId = null) => {
   return socket;
 };
 
-// Check if we have stored credentials and reconnect if available
+// Reconnect with stored credentials
 export const reconnectOperatorSocket = () => {
   // Load any existing data from storage
   operatorStorage.loadFromStorage();
@@ -314,34 +284,38 @@ export const reconnectOperatorSocket = () => {
   return null;
 };
 
-// Set handlers after initialization
-export const setMessageHandler = (handler) => {
+// Set handlers
+export const setSessionHandler = (handler) => {
   if (handler && typeof handler === 'function') {
-    messageHandler = handler;
+    console.log('Setting operator session handler');
+    sessionHandler = handler;
+  } else {
+    console.error('Invalid session handler provided:', handler);
   }
 };
 
-export const setSessionHandler = (handler) => {
+export const setMessageHandler = (handler) => {
   if (handler && typeof handler === 'function') {
-    sessionHandler = handler;
+    messageHandler = handler;
+  } else {
+    console.error('Invalid message handler provided:', handler);
   }
 };
 
 export const setClientListHandler = (handler) => {
   if (handler && typeof handler === 'function') {
     clientListHandler = handler;
+  } else {
+    console.error('Invalid client list handler provided:', handler);
   }
 };
 
 export const setClientQueueHandler = (handler) => {
   if (handler && typeof handler === 'function') {
     clientQueueHandler = handler;
+  } else {
+    console.error('Invalid client queue handler provided:', handler);
   }
-};
-
-// Utility functions
-export const getOperatorSocket = () => {
-  return socket;
 };
 
 export const disconnectOperatorSocket = () => {
@@ -391,7 +365,5 @@ export const acceptClient = (clientId) => {
 export const sendTypingStatus = (clientId, isTyping) => {
   if (socket && socket.connected) {
     socket.emit('operator-typing', { clientId, isTyping });
-    return true;
   }
-  return false;
 };

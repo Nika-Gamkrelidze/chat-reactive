@@ -25,8 +25,8 @@ function OperatorLogin() {
         sessionStorage.setItem('operatorName', username);
         sessionStorage.setItem('operatorNumber', number);
         
-        if (sessionData && sessionData.operatorId) {
-          sessionStorage.setItem('operatorId', sessionData.operatorId);
+        if (sessionData && sessionData.operator && sessionData.operator.id) {
+          sessionStorage.setItem('operatorId', sessionData.operator.id);
         }
         
         // Update auth context
@@ -34,11 +34,15 @@ function OperatorLogin() {
           name: username,
           number: number,
           type: 'operator',
-          operatorId: sessionData.operatorId
+          operatorId: sessionData.operator?.id
         });
         
-        // Navigate to dashboard
-        navigate('/operator/dashboard');
+        // Add a small delay to ensure storage is updated
+        setTimeout(() => {
+          // Navigate to dashboard
+          console.log('Navigating to dashboard...');
+          navigate('/operator/dashboard', { replace: true });
+        }, 100);
       });
       
       // Initialize socket connection
@@ -52,8 +56,8 @@ function OperatorLogin() {
       });
       
     } catch (error) {
-      console.error('Login error:', error);
       setError('Failed to connect. Please try again.');
+      console.error('Login error:', error);
       setIsLoading(false);
     }
   };
