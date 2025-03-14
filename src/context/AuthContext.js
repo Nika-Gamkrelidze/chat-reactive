@@ -13,11 +13,12 @@ export const AuthProvider = ({ children }) => {
       const clientName = sessionStorage.getItem('clientName');
       const clientNumber = sessionStorage.getItem('clientNumber');
       const operatorName = sessionStorage.getItem('operatorName');
+      const operatorNumber = sessionStorage.getItem('operatorNumber');
 
       if (clientName && clientNumber) {
         setUser({ type: 'client', name: clientName, number: clientNumber });
-      } else if (operatorName) {
-        setUser({ type: 'operator', name: operatorName });
+      } else if (operatorName && operatorNumber) {
+        setUser({ type: 'operator', name: operatorName, number: operatorNumber });
       }
     };
 
@@ -26,12 +27,9 @@ export const AuthProvider = ({ children }) => {
 
   const login = (userData, type) => {
     if (type === 'client') {
-      sessionStorage.setItem('clientName', userData.name);
-      sessionStorage.setItem('clientNumber', userData.number);
       setUser({ type: 'client', ...userData });
       navigate('/client/chat');
     } else if (type === 'operator') {
-      sessionStorage.setItem('operatorName', userData.name);
       setUser({ type: 'operator', ...userData });
       navigate('/operator/dashboard');
     }

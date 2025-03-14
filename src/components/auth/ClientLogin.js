@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { initClientSocket, isClientRegistered } from '../../services/socket/clientSocket';
+import { 
+  initClientSocket, 
+  isClientRegistered, 
+  setClientSessionHandler 
+} from '../../services/socket/clientSocket';
 
 function ClientLogin() {
   const [name, setName] = useState('');
@@ -23,15 +27,34 @@ function ClientLogin() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    
     try {
-      const socket = await initClientSocket(name, number);
+      // Set up session handler before initializing socket
+      setClientSessionHandler((sessionData) => {
+        console.log('Session data received in handler:', sessionData);
+        
+        // Store client data in session storage
+        sessionStorage.setItem('clientName', name);
+        sessionStorage.setItem('clientNumber', number);
+        
+        if (sessionData && sessionData.client && sessionData.client.id) {
+          sessionStorage.setItem('clientId', sessionData.client.id);
+        }
+        
+        if (sessionData && sessionData.roomId) {
+          sessionStorage.setItem('roomId', sessionData.roomId);
+        }
+        
+        // Navigate to chat page after receiving session data
+        console.log('Navigating to chat page...');
+        navigate('/client/chat', { replace: true });
+      });
       
-      if (socket) {
-        // Wait for socket connection before navigating
-        socket.on('connect', () => {
-          navigate('/client/chat', { replace: true });
-        });
-      }
+      // Initialize socket connection
+      const socket = initClientSocket(name, number);
+      
+      
     } catch (error) {
       setError('Failed to connect. Please try again.');
       console.error('Login error:', error);

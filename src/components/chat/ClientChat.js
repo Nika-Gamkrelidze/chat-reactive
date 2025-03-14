@@ -10,7 +10,8 @@ import {
   clientStorage,
   joinClientRoom,
   reconnectClientSocket,
-  isClientRegistered
+  isClientRegistered,
+  setClientSessionHandler
 } from '../../services/socket/clientSocket';
 import { FiSend, FiUser } from 'react-icons/fi';
 
@@ -76,25 +77,18 @@ function ClientChat() {
     
     // If no stored credentials or reconnection failed, initialize with provided credentials
     if (!socket) {
-      socket = initClientSocket(clientName, clientNumber, handleNewMessage, handleSessionUpdate);
+      socket = initClientSocket(clientName, clientNumber);
+      setClientMessageHandler(handleNewMessage);
+      setClientSessionHandler(handleSessionUpdate);
     }
     
     if (socket) {
       setIsConnected(true);
       
-      // Set message handler explicitly
-      setClientMessageHandler(handleNewMessage);
-      
       // Load existing messages from storage
       const storedMessages = clientStorage.messages || [];
       if (storedMessages.length > 0) {
         setMessages(storedMessages);
-      }
-      
-      // Join room if available
-      if (clientStorage.roomId) {
-        console.log('Joining room:', clientStorage.roomId);
-        joinClientRoom(clientStorage.roomId);
       }
       
       // Update operator info if available

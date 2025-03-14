@@ -1,117 +1,161 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
-  initOperatorSocket, 
+  reconnectOperatorSocket,
   sendMessageToClient, 
   requestClientQueue,
-  requestActiveClients
+  requestActiveClients,
+  setMessageHandler,
+  setClientListHandler,
+  setClientQueueHandler,
+  operatorStorage
 } from '../../services/socket/operatorSocket';
 
 function OperatorDashboard() {
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   
-  // State variables
+  // State for managing dashboard data
   const [activeClients, setActiveClients] = useState([]);
   const [pendingClients, setPendingClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [messages, setMessages] = useState({});
   const [inputMessage, setInputMessage] = useState('');
   
-  // Use ref to store socket to avoid re-renders
+  // Refs to prevent multiple effect runs and manage socket
   const socketRef = useRef(null);
+  const isInitializedRef = useRef(false);
 
-  // Memoized socket initialization
-  const initializeSocket = useCallback(async () => {
-    try {
-      const username = sessionStorage.getItem('operatorName');
-      const password = sessionStorage.getItem('operatorPassword');
+  // Initialize socket and set up event handlers
+  useEffect(() => {
+    if (isInitializedRef.current) return;
+    
+    const operatorName = sessionStorage.getItem('operatorName');
+    const operatorNumber = sessionStorage.getItem('operatorNumber');
+    const operatorId = sessionStorage.getItem('operatorId');
 
-      if (!username || !password) {
-        navigate('/operator/login');
-        return null;
-      }
+    if (!operatorName || !operatorNumber) {
+      navigate('/operator/login');
+      return;
+    }
 
-      const socket = await initOperatorSocket(username, password);
-      
-      // Safely set up event listeners
-      if (socket) {
-        socket.on('client-list', (clientList) => {
-          setActiveClients(clientList || []);
-        });
-
-        socket.on('client-queue', (data) => {
-          if (data?.pendingClients) {
-            setPendingClients(data.pendingClients);
-          }
-        });
-
-        socket.on('active-clients', (data) => {
-          if (data?.activeClients) {
-            setActiveClients(data.activeClients);
-          }
-        });
-
-        socket.on('new-message', (messageData) => {
-          if (messageData?.clientId) {
-            setMessages(prevMessages => {
-              const clientKey = messageData.clientId;
-              return {
-                ...prevMessages,
-                [clientKey]: [...(prevMessages[clientKey] || []), messageData]
-              };
-            });
-          }
-        });
-
+    const setupSocket = async () => {
+      try {
+        // Try to reconnect with stored credentials
+        const socket = reconnectOperatorSocket();
+        
+        if (!socket) {
+          console.error('Failed to reconnect socket');
+          navigate('/operator/login');
+          return;
+        }
+        
+        socketRef.current = socket;
+        isInitializedRef.current = true;
+        
         // Request initial data
-        socket.emit('get-client-list');
         requestClientQueue();
         requestActiveClients();
-      }
-
-      return socket;
-    } catch (error) {
-      console.error('Socket initialization error:', error);
-      navigate('/operator/login');
-      return null;
-    }
-  }, [navigate]);
-
-  // Effect to initialize socket
-  useEffect(() => {
-    let isMounted = true;
-    
-    const setupSocket = async () => {
-      const socket = await initializeSocket();
-      
-      if (isMounted && socket) {
-        socketRef.current = socket;
+        
+        // Load data from storage
+        if (operatorStorage.activeClients.length > 0) {
+          setActiveClients(operatorStorage.activeClients);
+        }
+        
+        if (operatorStorage.pendingClients.length > 0) {
+          setPendingClients(operatorStorage.pendingClients);
+        }
+        
+        if (Object.keys(operatorStorage.messages).length > 0) {
+          setMessages(operatorStorage.messages);
+        }
+        
+      } catch (error) {
+        console.error('Failed to initialize socket:', error);
+        navigate('/operator/login');
       }
     };
 
     setupSocket();
 
-    // Cleanup function
+    // Clean up on unmount
     return () => {
-      isMounted = false;
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      isInitializedRef.current = false;
     };
-  }, [initializeSocket]);
+  }, [navigate]);
+
+  // Set up event handlers
+  useEffect(() => {
+    // Set up message handler
+    setMessageHandler((messageData) => {
+      setMessages(prevMessages => {
+        const newMessages = {...prevMessages};
+        if (!newMessages[messageData.clientId]) {
+          newMessages[messageData.clientId] = [];
+        }
+        
+        // Check if message already exists
+        const exists = newMessages[messageData.clientId].some(
+          msg => msg.messageId === messageData.messageId
+        );
+        
+        if (!exists) {
+          newMessages[messageData.clientId].push(messageData);
+          // Sort by timestamp
+          newMessages[messageData.clientId].sort(
+            (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+          );
+        }
+        
+        return newMessages;
+      });
+    });
+    
+    // Set up client list handler
+    setClientListHandler((clientList) => {
+      setActiveClients(clientList || []);
+    });
+    
+    // Set up client queue handler
+    setClientQueueHandler((queueData) => {
+      if (queueData?.pendingClients) {
+        setPendingClients(queueData.pendingClients);
+      }
+    });
+    
+    // Clean up on unmount
+    return () => {
+      setMessageHandler(null);
+      setClientListHandler(null);
+      setClientQueueHandler(null);
+    };
+  }, []);
 
   // Message sending handler
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (inputMessage.trim() && selectedClient && socketRef.current) {
-      sendMessageToClient(
-        selectedClient.id,
-        selectedClient.roomId,
-        inputMessage
-      );
+    if (inputMessage.trim() && selectedClient) {
+      sendMessageToClient(selectedClient.id, inputMessage);
+      
+      // Optimistically add message to UI
+      const newMessage = {
+        clientId: selectedClient.id,
+        text: inputMessage,
+        sentByOperator: true,
+        timestamp: new Date().toISOString(),
+        messageId: `operator_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      };
+      
+      setMessages(prevMessages => {
+        const newMessages = {...prevMessages};
+        if (!newMessages[selectedClient.id]) {
+          newMessages[selectedClient.id] = [];
+        }
+        newMessages[selectedClient.id].push(newMessage);
+        return newMessages;
+      });
+      
       setInputMessage('');
     }
   };
@@ -144,16 +188,22 @@ function OperatorDashboard() {
         
         {/* Active Clients List */}
         <div className="overflow-y-auto">
-          {activeClients.map(client => (
-            <div 
-              key={client.id}
-              onClick={() => handleSelectClient(client)}
-              className={`p-4 border-b cursor-pointer ${selectedClient?.id === client.id ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
-            >
-              <h3 className="font-semibold">{client.name}</h3>
-              <p className="text-sm text-gray-500">{client.number}</p>
+          {activeClients.length > 0 ? (
+            activeClients.map(client => (
+              <div 
+                key={client.id}
+                onClick={() => handleSelectClient(client)}
+                className={`p-4 border-b cursor-pointer ${selectedClient?.id === client.id ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
+              >
+                <h3 className="font-semibold">{client.name}</h3>
+                <p className="text-sm text-gray-500">{client.number}</p>
+              </div>
+            ))
+          ) : (
+            <div className="p-4 text-center text-gray-500">
+              No active clients
             </div>
-          ))}
+          )}
         </div>
       </div>
 
@@ -168,20 +218,33 @@ function OperatorDashboard() {
 
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4">
-              {(messages[selectedClient.id] || []).map((message, index) => (
-                <div 
-                  key={index} 
-                  className={`mb-2 ${message.sentByOperator ? 'text-right' : 'text-left'}`}
-                >
-                  <span className={`inline-block p-2 rounded ${message.sentByOperator ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>
-                    {message.text}
-                  </span>
+              {(messages[selectedClient.id] || []).length > 0 ? (
+                (messages[selectedClient.id] || []).map((message, index) => (
+                  <div 
+                    key={index} 
+                    className={`mb-2 ${message.sentByOperator ? 'text-right' : 'text-left'}`}
+                  >
+                    <span className={`inline-block p-2 rounded ${
+                      message.sentByOperator 
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-gray-200'
+                    }`}>
+                      {message.text}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-gray-500 mt-4">
+                  No messages yet
                 </div>
-              ))}
+              )}
             </div>
 
             {/* Message Input */}
-            <form onSubmit={handleSendMessage} className="p-4 bg-white border-t flex">
+            <form 
+              onSubmit={handleSendMessage} 
+              className="p-4 bg-white border-t flex"
+            >
               <input 
                 type="text"
                 value={inputMessage}
