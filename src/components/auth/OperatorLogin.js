@@ -47,18 +47,18 @@ function OperatorLogin() {
       setSessionHandler((sessionData) => {
         console.log('Session data received:', sessionData);
         
-        // Store operator data in session storage
-        if (sessionData.operator) {
-          sessionStorage.setItem('operatorId', sessionData.operator.id);
-          sessionStorage.setItem('operatorName', username);
-          sessionStorage.setItem('operatorNumber', number);
+        // Store operator data in session storage - handle flattened structure
+        if (sessionData.operatorId) {
+          sessionStorage.setItem('operatorId', sessionData.operatorId);
+          sessionStorage.setItem('operatorName', sessionData.name || username);
+          sessionStorage.setItem('operatorNumber', sessionData.number || number);
           
           // Login in auth context with correct role
           login({
-            id: sessionData.operator.id,
-            name: username,
-            number: number,
-            role: 'operator'  // Make sure role is set correctly
+            id: sessionData.operatorId,
+            name: sessionData.name || username,
+            number: sessionData.number || number,
+            role: 'operator'
           });
           
           console.log('Session received, will navigate to dashboard...');
@@ -74,7 +74,7 @@ function OperatorLogin() {
       // Note: We don't navigate here - we wait for the session event
     } catch (error) {
       console.error('Login error:', error);
-      setError('Failed to connect. Please try again.');
+      setError('Failed to connect. Please try again later.');
       setIsLoading(false);
     }
   };

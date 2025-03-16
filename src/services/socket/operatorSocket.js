@@ -176,12 +176,18 @@ export const createOperatorSocket = () => {
     socket.on('session', (data) => {
       console.log('Operator session established with data:', data);
       
-      // Update storage with new session data
-      operatorStorage.updateFromSession(data);
+      // Update storage with new session data - handle flattened structure
+      operatorStorage.updateFromSession({
+        operator: {
+          id: data.operatorId,
+          name: data.name,
+          number: data.number
+        }
+      });
       
       // Update socket auth with new operator ID if available
-      if (data.operator && data.operator.id) {
-        socket.auth.userId = data.operator.id;
+      if (data.operatorId) {
+        socket.auth.userId = data.operatorId;
       }
       
       // Call session handler if defined
