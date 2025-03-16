@@ -50,49 +50,28 @@ function ClientChat() {
         return;
       }
       
-      // Process incoming messages (could be array or single message)
-      if (Array.isArray(message)) {
-        // Handle array of messages
-        setMessages(prevMessages => {
-          const updatedMessages = [...prevMessages];
-          
-          message.forEach(msg => {
-            // Check if message already exists to avoid duplicates
-            const existingIndex = updatedMessages.findIndex(m => m.messageId === msg.messageId);
-            if (existingIndex === -1) {
-              // Add sender flag to differentiate client/operator messages
-              const enhancedMsg = {
-                ...msg,
-                sender: msg.sentByOperator ? 'operator' : 'client'
-              };
-              updatedMessages.push(enhancedMsg);
-            }
-          });
-          
-          // Sort messages by timestamp
-          return updatedMessages.sort((a, b) => 
-            new Date(a.timestamp) - new Date(b.timestamp)
-          );
+      setMessages(prevMessages => {
+        const messagesToAdd = Array.isArray(message) ? message : [message];
+        
+        // Create a map of existing messages using messageId as key
+        const existingMessages = new Map(
+          prevMessages.map(msg => [msg.messageId, msg])
+        );
+        
+        // Only add messages that come from the server (they will have proper messageId format)
+        messagesToAdd.forEach(msg => {
+          // Only add messages with proper server-generated messageId (not temp ids)
+          if (msg.messageId && !msg.messageId.startsWith('temp_')) {
+            existingMessages.set(msg.messageId, {
+              ...msg,
+              sender: msg.sentByOperator ? 'operator' : 'client'
+            });
+          }
         });
-      } else {
-        // Handle single message
-        setMessages(prevMessages => {
-          // Check if message already exists
-          const exists = prevMessages.some(m => m.messageId === message.messageId);
-          if (exists) return prevMessages;
-          
-          // Add sender flag to differentiate client/operator messages
-          const enhancedMsg = {
-            ...message,
-            sender: message.sentByOperator ? 'operator' : 'client'
-          };
-          
-          // Return sorted messages
-          return [...prevMessages, enhancedMsg].sort((a, b) => 
-            new Date(a.timestamp) - new Date(b.timestamp)
-          );
-        });
-      }
+        
+        return Array.from(existingMessages.values())
+          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      });
     };
     
     // Define session handler function
@@ -210,7 +189,6 @@ function ClientChat() {
     
     if (!inputMessage.trim() || !isConnected) return;
     
-    // Get current room ID
     const currentRoomId = roomId || sessionStorage.getItem('roomId');
     
     if (!currentRoomId) {
@@ -220,7 +198,7 @@ function ClientChat() {
     
     console.log('Sending message with room ID:', currentRoomId);
     
-    // Send message
+    // Just send the message - no temporary message creation
     sendClientMessage(inputMessage.trim(), currentRoomId);
     
     // Clear input

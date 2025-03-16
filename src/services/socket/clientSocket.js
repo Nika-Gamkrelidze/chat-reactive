@@ -39,6 +39,8 @@ export const clientStorage = {
   
   // Add a message to storage
   addMessage: function(message) {
+    if (!message.messageId) return false;
+    
     // Check if message already exists
     const existingIndex = this.messages.findIndex(msg => msg.messageId === message.messageId);
     if (existingIndex === -1) {
@@ -214,31 +216,19 @@ export const createClientSocket = () => {
     socket.on('message', (data) => {
       console.log('Client received message:', data);
       
+      // Skip if no message handler
+      if (!messageHandler || typeof messageHandler !== 'function') return;
+      
       // Process messages
       if (Array.isArray(data)) {
-        // Handle array of messages
-        clientStorage.addMessages(data);
-        
-        // Call message handler with the entire array
-        if (messageHandler && typeof messageHandler === 'function') {
-          messageHandler(data);
-        }
+        // Handle array of messages - send as single update
+        messageHandler(data);
       } else if (data.messages && Array.isArray(data.messages)) {
-        // Handle message object with messages array
-        clientStorage.addMessages(data.messages);
-        
-        // Call message handler for each message
-        if (messageHandler && typeof messageHandler === 'function') {
-          messageHandler(data.messages);
-        }
+        // Handle message object with messages array - send as single update
+        messageHandler(data.messages);
       } else if (data.text || data.messageId) {
         // Single message object
-        clientStorage.addMessage(data);
-        
-        // Call message handler
-        if (messageHandler && typeof messageHandler === 'function') {
-          messageHandler(data);
-        }
+        messageHandler(data);
       }
     });
     
@@ -394,33 +384,8 @@ export const sendClientMessage = (text, roomId) => {
     senderId: clientId
   };
   
-  // Generate a temporary message ID for tracking
-  const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  // Create a temporary message object for local display
-  const tempMessage = {
-    messageId: tempMessageId,
-    roomId,
-    senderId: clientId,
-    text,
-    timestamp: new Date().toISOString(),
-    isPending: true,
-    sender: 'client', // Add sender property for UI display
-    sentByOperator: false
-  };
-  
-  // Add to client storage
-  clientStorage.addMessage(tempMessage);
-  
-  // Call message handler if defined
-  if (messageHandler && typeof messageHandler === 'function') {
-    messageHandler(tempMessage);
-  }
-  
-  // Emit message event with the correct event name
+  // Just emit the message to server - no temporary message creation
   socket.emit('send_message', messageData);
-  
-  return tempMessageId;
 };
 
 // Send typing indicator to the operator
