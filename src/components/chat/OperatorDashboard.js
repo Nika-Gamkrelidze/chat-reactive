@@ -315,10 +315,10 @@ function OperatorDashboard() {
         </div>
       ) : (
         <div className="flex-1 flex">
-          {/* Sidebar */}
+          {/* Sidebar - now only showing active clients */}
           <div className="w-64 bg-white border-r flex flex-col">
             {/* Active clients */}
-            <div className="p-4 flex-1 overflow-y-auto border-b">
+            <div className="p-4 flex-1 overflow-y-auto">
               <h2 className="text-lg font-medium text-gray-700 mb-2">Active Clients</h2>
               {activeClients.length > 0 ? (
                 <ul className="space-y-2">
@@ -339,30 +339,6 @@ function OperatorDashboard() {
                 </ul>
               ) : (
                 <p className="text-gray-500 text-sm">No active clients</p>
-              )}
-            </div>
-            
-            {/* Pending clients */}
-            <div className="p-4 flex-1 overflow-y-auto">
-              <h2 className="text-lg font-medium text-gray-700 mb-2">Pending Clients</h2>
-              {pendingClients.length > 0 ? (
-                <ul className="space-y-2">
-                  {pendingClients.map(client => (
-                    <li key={client.id} className="p-2 border rounded bg-gray-50">
-                      <div className="font-medium">{client.name}</div>
-                      <div className="text-sm text-gray-500 mb-2">{client.number}</div>
-                      <button
-                        onClick={() => handleAcceptClient(client.id)}
-                        className="w-full px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
-                        disabled={!isConnected}
-                      >
-                        Accept
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-500 text-sm">No pending clients</p>
               )}
             </div>
           </div>
