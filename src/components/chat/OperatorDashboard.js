@@ -83,27 +83,28 @@ function OperatorDashboard() {
         return;
       }
       
-      // Handle regular message
       setMessages(prevMessages => {
         const clientId = message.clientId;
         
-        // Initialize client messages array if it doesn't exist
-        if (!prevMessages[clientId]) {
-          prevMessages[clientId] = [];
-        }
+        // Skip if we don't have a clientId
+        if (!clientId) return prevMessages;
+        
+        // Initialize or get existing messages for this client
+        const clientMessages = prevMessages[clientId] || [];
         
         // Check if message already exists
-        const messageExists = prevMessages[clientId].some(
-          msg => msg.messageId === message.messageId
-        );
+        const messageExists = clientMessages.some(msg => msg.messageId === message.messageId);
         
         if (!messageExists) {
           // Add new message
+          const updatedClientMessages = [...clientMessages, {
+            ...message,
+            sentByOperator: message.senderId === operatorStorage.operatorId
+          }].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          
           return {
             ...prevMessages,
-            [clientId]: [...prevMessages[clientId], message].sort(
-              (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-            )
+            [clientId]: updatedClientMessages
           };
         }
         
@@ -261,7 +262,7 @@ function OperatorDashboard() {
     
     console.log('Sending message to client', selectedClient.id, 'in room', roomId);
     
-    // Send message with the correct parameters (clientId, text, roomId)
+    // Just send the message - no temporary message creation
     sendMessageToClient(selectedClient.id, inputMessage.trim(), roomId);
     
     // Clear input

@@ -280,22 +280,35 @@ export const createOperatorSocket = () => {
     });
     
     // Handle incoming messages
-    socket.on('message_from_client', (data) => {
-      console.log('Received message from client:', data);
+    socket.on('message', (data) => {
+      console.log('Operator received message:', data);
       
-      if (data && data.clientId && data.message) {
-        const messageObj = {
-          messageId: data.message.messageId || `client_${Date.now()}`,
-          clientId: data.clientId,
-          text: data.message.text,
-          timestamp: data.message.timestamp || new Date().toISOString(),
-          sentByOperator: false
+      if (Array.isArray(data)) {
+        // Process each message in the array
+        data.forEach(message => {
+          if (message.roomId && (message.text || message.messageId)) {
+            // Add clientId to the message object for internal routing
+            const enhancedMessage = {
+              ...message,
+              clientId: message.senderId !== operatorStorage.operatorId ? message.senderId : message.receiverId
+            };
+            
+            // Call message handler if defined
+            if (messageHandler && typeof messageHandler === 'function') {
+              messageHandler(enhancedMessage);
+            }
+          }
+        });
+      } else if (data.roomId && (data.text || data.messageId)) {
+        // Add clientId to the single message object
+        const enhancedMessage = {
+          ...data,
+          clientId: data.senderId !== operatorStorage.operatorId ? data.senderId : data.receiverId
         };
         
-        operatorStorage.addMessage(messageObj);
-        
+        // Call message handler if defined
         if (messageHandler && typeof messageHandler === 'function') {
-          messageHandler(messageObj);
+          messageHandler(enhancedMessage);
         }
       }
     });
@@ -481,38 +494,8 @@ export const sendMessageToClient = (clientId, text, roomId) => {
     receiverId: clientId
   };
   
-  // Generate a temporary message ID for tracking
-  const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  // Create a temporary message object for local display
-  const tempMessage = {
-    messageId: tempMessageId,
-    roomId,
-    senderId: operatorId,
-    receiverId: clientId,
-    text,
-    timestamp: new Date().toISOString(),
-    isPending: true,
-    sentByOperator: true
-  };
-  
-  // Add to operator storage
-  if (!operatorStorage.messages[clientId]) {
-    operatorStorage.messages[clientId] = [];
-  }
-  
-  operatorStorage.messages[clientId].push(tempMessage);
-  operatorStorage.saveToStorage();
-  
-  // Call message handler if defined
-  if (messageHandler && typeof messageHandler === 'function') {
-    messageHandler(tempMessage);
-  }
-  
-  // Emit message event with the correct event name
+  // Just emit the message to server - no temporary message creation
   socket.emit('send_message', messageData);
-  
-  return tempMessageId;
 };
 
 // Accept client from queue
