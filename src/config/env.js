@@ -2,10 +2,10 @@
 const config = {
   // Server connection settings
   server: {
-    protocol: 'http',
-    // host: 'chat.communiq.ge',
-    host: '192.168.14.46',
-    port: '4000', // Empty string for default port
+    protocol: 'https',
+    // host: '192.168.14.46',
+    host: 'chat.communiq.ge',
+    port: '', // Empty string for default port
     namespace: 'namespace1',
     get url() {
       return `${this.protocol}://${this.host}${this.port ? ':' + this.port : ''}`;

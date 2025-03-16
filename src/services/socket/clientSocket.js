@@ -51,6 +51,19 @@ export const clientStorage = {
     return false;
   },
   
+  // Add multiple messages to storage
+  addMessages: function(messages) {
+    if (!Array.isArray(messages)) return false;
+    
+    let added = false;
+    messages.forEach(message => {
+      const wasAdded = this.addMessage(message);
+      if (wasAdded) added = true;
+    });
+    
+    return added;
+  },
+  
   // Save data to sessionStorage
   saveToStorage: function() {
     try {
@@ -202,23 +215,27 @@ export const createClientSocket = () => {
       console.log('Client received message:', data);
       
       // Process messages
-      if (data.messages && Array.isArray(data.messages)) {
-        // Add messages to storage
-        data.messages.forEach(message => {
-          clientStorage.addMessage(message);
-        });
+      if (Array.isArray(data)) {
+        // Handle array of messages
+        clientStorage.addMessages(data);
         
-        // Call message handler if defined
+        // Call message handler with the entire array
         if (messageHandler && typeof messageHandler === 'function') {
-          data.messages.forEach(message => {
-            messageHandler(message);
-          });
+          messageHandler(data);
         }
-      } else if (data.text) {
-        // Single message
+      } else if (data.messages && Array.isArray(data.messages)) {
+        // Handle message object with messages array
+        clientStorage.addMessages(data.messages);
+        
+        // Call message handler for each message
+        if (messageHandler && typeof messageHandler === 'function') {
+          messageHandler(data.messages);
+        }
+      } else if (data.text || data.messageId) {
+        // Single message object
         clientStorage.addMessage(data);
         
-        // Call message handler if defined
+        // Call message handler
         if (messageHandler && typeof messageHandler === 'function') {
           messageHandler(data);
         }
@@ -359,7 +376,7 @@ export const sendClientMessage = (text, roomId) => {
     return false;
   }
   
-  const clientId = clientStorage.clientId || sessionStorage.getItem('clientId');
+  const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
   
   if (!clientId) {
     console.error('Cannot send message: client ID not available');
@@ -388,6 +405,7 @@ export const sendClientMessage = (text, roomId) => {
     text,
     timestamp: new Date().toISOString(),
     isPending: true,
+    sender: 'client', // Add sender property for UI display
     sentByOperator: false
   };
   
@@ -408,7 +426,7 @@ export const sendClientMessage = (text, roomId) => {
 // Send typing indicator to the operator
 export const sendClientTypingStatus = (isTyping) => {
   if (socket && socket.connected) {
-    // socket.emit('client-typing', { isTyping });
+    socket.emit('client-typing', { isTyping });
   }
 };
 
@@ -421,4 +439,4 @@ export const isClientRegistered = () => {
 // Clear all client data
 export const clearClientData = () => {
   clientStorage.clear();
-}; 
+};

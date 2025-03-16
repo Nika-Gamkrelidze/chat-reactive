@@ -50,14 +50,49 @@ function ClientChat() {
         return;
       }
       
-      // Add message to state
-      setMessages(prevMessages => {
-        // Check if message already exists
-        const exists = prevMessages.some(m => m.messageId === message.messageId);
-        if (exists) return prevMessages;
-        
-        return [...prevMessages, message];
-      });
+      // Process incoming messages (could be array or single message)
+      if (Array.isArray(message)) {
+        // Handle array of messages
+        setMessages(prevMessages => {
+          const updatedMessages = [...prevMessages];
+          
+          message.forEach(msg => {
+            // Check if message already exists to avoid duplicates
+            const existingIndex = updatedMessages.findIndex(m => m.messageId === msg.messageId);
+            if (existingIndex === -1) {
+              // Add sender flag to differentiate client/operator messages
+              const enhancedMsg = {
+                ...msg,
+                sender: msg.sentByOperator ? 'operator' : 'client'
+              };
+              updatedMessages.push(enhancedMsg);
+            }
+          });
+          
+          // Sort messages by timestamp
+          return updatedMessages.sort((a, b) => 
+            new Date(a.timestamp) - new Date(b.timestamp)
+          );
+        });
+      } else {
+        // Handle single message
+        setMessages(prevMessages => {
+          // Check if message already exists
+          const exists = prevMessages.some(m => m.messageId === message.messageId);
+          if (exists) return prevMessages;
+          
+          // Add sender flag to differentiate client/operator messages
+          const enhancedMsg = {
+            ...message,
+            sender: message.sentByOperator ? 'operator' : 'client'
+          };
+          
+          // Return sorted messages
+          return [...prevMessages, enhancedMsg].sort((a, b) => 
+            new Date(a.timestamp) - new Date(b.timestamp)
+          );
+        });
+      }
     };
     
     // Define session handler function
@@ -86,9 +121,14 @@ function ClientChat() {
         }
       }
       
-      // Load messages if available
+      // Load messages if available and process them
       if (sessionData.messages && Array.isArray(sessionData.messages)) {
-        setMessages(sessionData.messages);
+        const processedMessages = sessionData.messages.map(msg => ({
+          ...msg,
+          sender: msg.sentByOperator ? 'operator' : 'client'
+        }));
+        
+        setMessages(processedMessages);
       }
       
       setIsConnected(true);
@@ -118,10 +158,15 @@ function ClientChat() {
       setIsLoading(false);
     });
     
-    // Load existing messages from storage
+    // Load existing messages from storage and process them
     const storedMessages = clientStorage.messages || [];
     if (storedMessages.length > 0) {
-      setMessages(storedMessages);
+      const processedMessages = storedMessages.map(msg => ({
+        ...msg,
+        sender: msg.sentByOperator ? 'operator' : 'client'
+      }));
+      
+      setMessages(processedMessages);
     }
     
     // Update operator info if available
@@ -202,6 +247,19 @@ function ClientChat() {
     }, 2000);
   };
   
+  // Helper to format message timestamp
+  const formatMessageTime = (timestamp) => {
+    try {
+      return new Date(timestamp).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit'
+      });
+    } catch (e) {
+      console.error('Error formatting timestamp:', e);
+      return '';
+    }
+  };
+  
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
@@ -236,7 +294,7 @@ function ClientChat() {
         <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
           {messages.map((msg, index) => (
             <div
-              key={index}
+              key={`${msg.messageId || index}`}
               className={`flex ${msg.sender === 'client' ? 'justify-end' : 'justify-start'} mb-3`}
             >
               <div
@@ -250,16 +308,21 @@ function ClientChat() {
                 <p className={`text-xs mt-1 ${
                   msg.sender === 'client' ? 'text-primary-100' : 'text-gray-400'
                 }`}>
-                  {new Date(msg.timestamp).toLocaleTimeString()}
+                  {formatMessageTime(msg.timestamp)}
+                  {msg.isPending && <span className="ml-1">✓</span>}
                 </p>
               </div>
             </div>
           ))}
           {operatorTyping && (
-            <div className="flex items-center space-x-2 text-sm text-gray-500">
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></div>
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></div>
+            <div className="flex justify-start mb-3">
+              <div className="bg-white border border-gray-200 rounded-2xl px-4 py-2">
+                <div className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></div>
+                </div>
+              </div>
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -294,4 +357,4 @@ function ClientChat() {
   );
 }
 
-export default ClientChat; 
+export default ClientChat;
