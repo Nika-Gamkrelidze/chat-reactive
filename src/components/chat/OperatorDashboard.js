@@ -279,20 +279,20 @@ function OperatorDashboard() {
   // Render dashboard
   return (
     <div className="h-screen bg-gray-100 flex flex-col overflow-hidden">
-      {/* Header - fixed height */}
+      {/* Header */}
       <header className="bg-white shadow-sm p-4 flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-semibold text-gray-800">Operator Dashboard</h1>
+          <h1 className="text-xl font-semibold text-gray-800">ოპერატორის პანელი</h1>
           <div className="text-sm text-gray-500">
             {isConnected ? (
               <span className="text-green-500 flex items-center">
                 <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                Connected
+                დაკავშირებული
               </span>
             ) : (
               <span className="text-red-500 flex items-center">
                 <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                Disconnected
+                კავშირი გაწყვეტილია
               </span>
             )}
           </div>
@@ -301,7 +301,7 @@ function OperatorDashboard() {
           onClick={handleLogout}
           className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
         >
-          Logout
+          გასვლა
         </button>
       </header>
       
@@ -310,16 +310,15 @@ function OperatorDashboard() {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Connecting to server...</p>
+            <p className="text-gray-600">სერვერთან დაკავშირება...</p>
           </div>
         </div>
       ) : (
         <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar - fixed width, scrollable */}
+          {/* Sidebar */}
           <div className="w-64 bg-white border-r flex-shrink-0">
-            {/* Active clients */}
             <div className="h-full overflow-y-auto p-4">
-              <h2 className="text-lg font-medium text-gray-700 mb-2">Active Clients</h2>
+              <h2 className="text-lg font-medium text-gray-700 mb-2">მომხმარებლები</h2>
               {activeClients.length > 0 ? (
                 <ul className="space-y-2">
                   {activeClients.map(client => (
@@ -338,16 +337,16 @@ function OperatorDashboard() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-gray-500 text-sm">No active clients</p>
+                <p className="text-gray-500 text-sm">აქტიური მომხმარებლები ვერ მოიძებნა</p>
               )}
             </div>
           </div>
           
-          {/* Chat area - flex container with fixed header and input */}
+          {/* Chat area */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {selectedClient ? (
               <>
-                {/* Chat header - fixed height */}
+                {/* Chat header */}
                 <div className="bg-white border-b p-4 flex-shrink-0">
                   <div>
                     <h2 className="font-medium">{selectedClient.name}</h2>
@@ -355,7 +354,7 @@ function OperatorDashboard() {
                   </div>
                 </div>
                 
-                {/* Messages - scrollable */}
+                {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
                   {messages[selectedClient.id] && messages[selectedClient.id].length > 0 ? (
                     messages[selectedClient.id].map((message, index) => (
@@ -379,19 +378,19 @@ function OperatorDashboard() {
                     ))
                   ) : (
                     <div className="text-center text-gray-500 mt-4">
-                      No messages yet
+                      შეტყობინებები არ არის
                     </div>
                   )}
                 </div>
 
-                {/* Message input - fixed height */}
+                {/* Message input */}
                 <div className="bg-white border-t p-4 flex-shrink-0">
                   <form onSubmit={handleSendMessage} className="flex space-x-4">
                     <input 
                       type="text"
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
-                      placeholder="Type a message..."
+                      placeholder="შეიყვანეთ შეტყობინება..."
                       className="flex-1 p-2 border rounded-l-lg"
                       disabled={!isConnected}
                     />
@@ -404,14 +403,14 @@ function OperatorDashboard() {
                       }`}
                       disabled={!isConnected}
                     >
-                      Send
+                      გაგზავნა
                     </button>
                   </form>
                 </div>
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-gray-500">
-                Select a client to start chatting
+                აირჩიეთ მომხმარებელი ჩათის დასაწყებად
               </div>
             )}
           </div>
