@@ -294,8 +294,8 @@ function ClientChat() {
       <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-2xl shadow-soft text-center">
           <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-800">Connecting to chat...</h2>
-          <p className="text-gray-500 mt-2">Please wait while we establish your connection</p>
+          <h2 className="text-xl font-semibold text-gray-800">კავშირის დამყარება...</h2>
+          <p className="text-gray-500 mt-2">გთხოვთ დაელოდოთ კავშირის დამყარებას</p>
         </div>
       </div>
     );
@@ -309,14 +309,14 @@ function ClientChat() {
           <div>
             <h2 className="text-xl font-semibold">
               {hasOperator 
-                ? `Chatting with ${operatorInfo?.name || 'Support Agent'}`
-                : 'Waiting for an operator...'}
+                ? `ჩათი ${operatorInfo?.name || 'ოპერატორთან'}`
+                : 'ოპერატორის ლოდინი...'}
             </h2>
             <p className="text-sm text-primary-100">
-              {!isConnected && <span className="text-red-200">⚠️ Reconnecting...</span>}
+              {!isConnected && <span className="text-red-200">⚠️ ხელახლა დაკავშირება...</span>}
               {isConnected && (hasOperator 
-                ? 'You are now connected with a support agent'
-                : 'You have been placed in a queue')}
+                ? 'თქვენ დაკავშირებული ხართ ოპერატორთან'
+                : 'თქვენ ხართ რიგში')}
             </p>
           </div>
           <button
@@ -324,7 +324,7 @@ function ClientChat() {
             className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
           >
             <IoMdExit className="text-xl" />
-            <span>End Chat</span>
+            <span>ჩათის დასრულება</span>
           </button>
         </div>
         
@@ -374,7 +374,7 @@ function ClientChat() {
               value={inputMessage}
               onChange={handleInputChange}
               className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none"
-              placeholder="Type your message..."
+              placeholder="შეიყვანეთ შეტყობინება..."
               disabled={!isConnected}
             />
             <button
@@ -386,7 +386,7 @@ function ClientChat() {
               }`}
               disabled={!isConnected}
             >
-              Send
+              გაგზავნა
             </button>
           </form>
         </div>
@@ -395,7 +395,7 @@ function ClientChat() {
         {showFeedbackModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Rate Your Experience</h3>
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">შეაფასეთ მომსახურება</h3>
               
               {/* Star Rating */}
               <div className="flex justify-center space-x-2 mb-4">
@@ -416,7 +416,7 @@ function ClientChat() {
               <textarea
                 value={feedbackComment}
                 onChange={(e) => setFeedbackComment(e.target.value)}
-                placeholder="Leave a comment (optional)"
+                placeholder="დატოვეთ კომენტარი (არასავალდებულო)"
                 className="w-full p-3 border border-gray-200 rounded-lg mb-4 h-32 resize-none focus:ring-2 focus:ring-primary-400 focus:border-transparent"
               />
               
@@ -426,7 +426,7 @@ function ClientChat() {
                   onClick={() => setShowFeedbackModal(false)}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
-                  Cancel
+                  გაუქმება
                 </button>
                 <button
                   onClick={handleSubmitFeedback}
@@ -437,7 +437,7 @@ function ClientChat() {
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  Submit Feedback
+                  გაგზავნა
                 </button>
               </div>
             </div>
