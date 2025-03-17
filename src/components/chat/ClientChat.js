@@ -10,7 +10,8 @@ import {
   getClientSocket,
   sendClientEndChat,
   sendClientFeedback,
-  cleanupClientSocket
+  cleanupClientSocket,
+  isSocketConnected
 } from '../../services/socket/clientSocket';
 import { MdCallEnd } from 'react-icons/md';
 import { IoMdExit } from 'react-icons/io';
@@ -128,25 +129,43 @@ function ClientChat() {
     setClientMessageHandler(handleNewMessage);
     setClientSessionHandler(handleSessionUpdate);
     
-    // Initialize socket connection
-    console.log('Initializing client socket with:', { clientName, clientNumber, clientId });
-    const socket = initClientSocket(clientName, clientNumber, clientId);
-    
-    // Handle connection events
-    socket.on('connect', () => {
-      console.log('Socket connected in ClientChat component');
-      setIsConnected(true);
-    });
-    
-    socket.on('disconnect', () => {
-      console.log('Socket disconnected in ClientChat component');
-      setIsConnected(false);
-    });
-    
-    socket.on('connect_error', (error) => {
-      console.error('Connection error in ClientChat:', error);
+    // Check if socket is already connected
+    if (!isSocketConnected()) {
+      // Only initialize socket if not already connected
+      console.log('Initializing client socket with:', { clientName, clientNumber, clientId });
+      initClientSocket(clientName, clientNumber, clientId);
+    } else {
+      console.log('Using existing socket connection');
       setIsLoading(false);
-    });
+      setIsConnected(true);
+      
+      // Request session reconnect data
+      const socket = getClientSocket();
+      if (socket) {
+        socket.emit('request-session-data');
+      }
+    }
+    
+    // Get current socket instance
+    const socket = getClientSocket();
+    
+    if (socket) {
+      // Handle connection events
+      socket.on('connect', () => {
+        console.log('Socket connected in ClientChat component');
+        setIsConnected(true);
+      });
+      
+      socket.on('disconnect', () => {
+        console.log('Socket disconnected in ClientChat component');
+        setIsConnected(false);
+      });
+      
+      socket.on('connect_error', (error) => {
+        console.error('Connection error in ClientChat:', error);
+        setIsLoading(false);
+      });
+    }
     
     // Load existing messages from storage and process them
     const storedMessages = clientStorage.messages || [];

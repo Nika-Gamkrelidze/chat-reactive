@@ -258,8 +258,19 @@ export const createClientSocket = () => {
   return socket;
 };
 
-// Initialize socket connection with user credentials
+// Add this function to check if socket exists and is connected
+export const isSocketConnected = () => {
+  return socket && socket.connected;
+};
+
+// Modify initClientSocket to prevent duplicate connections
 export const initClientSocket = (name, number, clientId = null) => {
+  // If socket exists and is connected, just return it
+  if (isSocketConnected()) {
+    console.log('Socket already connected, reusing existing connection');
+    return socket;
+  }
+  
   // Create socket instance if not already created
   if (!socket) {
     createClientSocket();

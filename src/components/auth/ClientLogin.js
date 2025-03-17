@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { initClientSocket, setClientSessionHandler } from '../../services/socket/clientSocket';
+import { initClientSocket, setClientSessionHandler, isSocketConnected } from '../../services/socket/clientSocket';
 
 function ClientLogin() {
   const [name, setName] = useState('');
@@ -58,20 +58,20 @@ function ClientLogin() {
             id: sessionData.client.id,
             name: name,
             number: number,
-            role: 'client'  // Make sure role is set correctly
+            role: 'client'
           });
           
           console.log('Session received, will navigate to chat...');
-          
-          // Set state to trigger navigation in the useEffect
           setSessionReceived(true);
         }
       });
       
-      // Initialize socket connection
-      initClientSocket(name, number);
+      // Check if socket is already connected
+      if (!isSocketConnected()) {
+        // Only initialize if not connected
+        initClientSocket(name, number);
+      }
       
-      // Note: We don't navigate here - we wait for the session event
     } catch (error) {
       console.error('Login error:', error);
       setError('Failed to connect. Please try again.');
