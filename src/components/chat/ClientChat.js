@@ -7,8 +7,16 @@ import {
   sendClientMessage, 
   sendClientTypingStatus,
   clientStorage,
-  getClientSocket
+  getClientSocket,
+  sendClientEndChat,
+  sendClientFeedback,
+  cleanupClientSocket
 } from '../../services/socket/clientSocket';
+import { MdCallEnd } from 'react-icons/md';
+import { IoMdExit } from 'react-icons/io';
+import { BiExit } from 'react-icons/bi';
+import { RiCloseLine } from 'react-icons/ri';
+import { FiPhoneOff } from 'react-icons/fi';
 
 function ClientChat() {
   const [messages, setMessages] = useState([]);
@@ -24,6 +32,9 @@ function ClientChat() {
   const navigate = useNavigate();
   const [roomId, setRoomId] = useState(null);
   const [clientInfo, setClientInfo] = useState(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackScore, setFeedbackScore] = useState(0);
+  const [feedbackComment, setFeedbackComment] = useState('');
   
   // Get client info from session storage
   const clientName = sessionStorage.getItem('clientName');
@@ -238,6 +249,46 @@ function ClientChat() {
     }
   };
   
+  const handleEndChat = () => {
+    const endChatData = {
+      clientId,
+      clientName,
+      clientNumber,
+      roomId
+    };
+    
+    sendClientEndChat(endChatData);
+    setShowFeedbackModal(true);
+  };
+  
+  const handleSubmitFeedback = () => {
+    const feedbackData = {
+      clientId,
+      clientNumber,
+      clientName,
+      feedbackScore,
+      feedbackComment,
+      operatorId: operatorInfo?.id,
+      operatorName: operatorInfo?.name
+    };
+    
+    sendClientFeedback(feedbackData);
+    setShowFeedbackModal(false);
+
+    // Use the new cleanup function
+    cleanupClientSocket();
+    
+    // Reset component state
+    setMessages([]);
+    setHasOperator(false);
+    setOperatorInfo(null);
+    setRoomId(null);
+    setIsConnected(false);
+    
+    // Navigate to login
+    navigate('/client/login');
+  };
+  
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
@@ -254,18 +305,27 @@ function ClientChat() {
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-soft overflow-hidden flex flex-col h-[80vh]">
         {/* Chat Header */}
-        <div className="bg-gradient-to-r from-primary-500 to-primary-600 text-white p-4">
-          <h2 className="text-xl font-semibold">
-            {hasOperator 
-              ? `Chatting with ${operatorInfo?.name || 'Support Agent'}`
-              : 'Waiting for an operator...'}
-          </h2>
-          <p className="text-sm text-primary-100">
-            {!isConnected && <span className="text-red-200">⚠️ Reconnecting...</span>}
-            {isConnected && (hasOperator 
-              ? 'You are now connected with a support agent'
-              : 'You have been placed in a queue')}
-          </p>
+        <div className="bg-gradient-to-r from-primary-500 to-primary-600 text-white p-4 flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-semibold">
+              {hasOperator 
+                ? `Chatting with ${operatorInfo?.name || 'Support Agent'}`
+                : 'Waiting for an operator...'}
+            </h2>
+            <p className="text-sm text-primary-100">
+              {!isConnected && <span className="text-red-200">⚠️ Reconnecting...</span>}
+              {isConnected && (hasOperator 
+                ? 'You are now connected with a support agent'
+                : 'You have been placed in a queue')}
+            </p>
+          </div>
+          <button
+            onClick={handleEndChat}
+            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
+          >
+            <IoMdExit className="text-xl" />
+            <span>End Chat</span>
+          </button>
         </div>
         
         {/* Messages */}
@@ -330,6 +390,59 @@ function ClientChat() {
             </button>
           </form>
         </div>
+
+        {/* Feedback Modal */}
+        {showFeedbackModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Rate Your Experience</h3>
+              
+              {/* Star Rating */}
+              <div className="flex justify-center space-x-2 mb-4">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    onClick={() => setFeedbackScore(star)}
+                    className={`text-2xl transition-colors ${
+                      star <= feedbackScore ? 'text-yellow-400' : 'text-gray-300'
+                    }`}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+              
+              {/* Comment Box */}
+              <textarea
+                value={feedbackComment}
+                onChange={(e) => setFeedbackComment(e.target.value)}
+                placeholder="Leave a comment (optional)"
+                className="w-full p-3 border border-gray-200 rounded-lg mb-4 h-32 resize-none focus:ring-2 focus:ring-primary-400 focus:border-transparent"
+              />
+              
+              {/* Submit Button */}
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowFeedbackModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitFeedback}
+                  disabled={feedbackScore === 0}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    feedbackScore > 0
+                      ? 'bg-primary-500 hover:bg-primary-600 text-white'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  Submit Feedback
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

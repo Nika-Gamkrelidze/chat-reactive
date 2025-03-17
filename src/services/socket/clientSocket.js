@@ -405,3 +405,37 @@ export const isClientRegistered = () => {
 export const clearClientData = () => {
   clientStorage.clear();
 };
+
+// Send end chat notification to server
+export const sendClientEndChat = (clientData) => {
+  if (socket && socket.connected) {
+    socket.emit('client-ended-chat', clientData);
+  }
+};
+
+// Send feedback to server
+export const sendClientFeedback = (feedbackData) => {
+  if (socket && socket.connected) {
+    socket.emit('client-feedback', feedbackData);
+    // Cleanup after sending feedback
+    cleanupClientSocket();
+  }
+};
+
+// Add this new function
+export const cleanupClientSocket = () => {
+  if (socket) {
+    // Remove all listeners
+    socket.removeAllListeners();
+    // Disconnect socket
+    socket.disconnect();
+    // Reset socket instance
+    socket = null;
+    // Reset handlers
+    messageHandler = null;
+    sessionHandler = null;
+  }
+  
+  // Clear storage
+  clientStorage.clear();
+};
