@@ -184,6 +184,25 @@ export const createClientSocket = () => {
       console.error('Client socket connection error:', error);
     });
     
+    // Add this new event handler before the session event
+    socket.on('operator_joined', (data) => {
+      console.log('Operator joined:', data);
+      if (data.operator) {
+        clientStorage.updateFromSession({
+          operator: data.operator,
+          roomId: data.roomId
+        });
+        
+        // Call session handler if defined
+        if (sessionHandler && typeof sessionHandler === 'function') {
+          sessionHandler({
+            operator: data.operator,
+            roomId: data.roomId
+          });
+        }
+      }
+    });
+    
     // Handle session establishment
     socket.on('session', (data) => {
       console.log('Client session established with data:', data);
