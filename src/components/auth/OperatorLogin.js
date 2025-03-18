@@ -46,18 +46,22 @@ function OperatorLogin() {
       // Set up session handler before initializing socket
       setSessionHandler((sessionData) => {
         console.log('Session data received:', sessionData);
+
+        const {operator} = sessionData;
         
         // Store operator data in session storage - handle flattened structure
-        if (sessionData.operatorId) {
-          sessionStorage.setItem('operatorId', sessionData.operatorId);
-          sessionStorage.setItem('operatorName', sessionData.name || username);
-          sessionStorage.setItem('operatorNumber', sessionData.number || number);
+        if (operator.id) {
+          sessionStorage.setItem('operatorId', operator.id);
+          sessionStorage.setItem('operatorName', operator.name || username);
+          sessionStorage.setItem('operatorNumber', operator.number || number);
+
+          // set socket auth id
           
           // Login in auth context with correct role
           login({
-            id: sessionData.operatorId,
-            name: sessionData.name || username,
-            number: sessionData.number || number,
+            id: operator.id,
+            name: operator.name || username,
+            number: operator.number || number,
             role: 'operator'
           });
           

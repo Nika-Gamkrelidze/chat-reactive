@@ -30,6 +30,7 @@ function OperatorDashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [operatorStatus, setOperatorStatus] = useState('active');
   
   // Refs to prevent multiple effect runs
   const socketInitializedRef = useRef(false);
@@ -276,6 +277,20 @@ function OperatorDashboard() {
     navigate('/operator/login');
   };
   
+  // Add handler for status toggle
+  const handleStatusToggle = () => {
+    const newStatus = operatorStatus === 'active' ? 'away' : 'active';
+    const socket = getOperatorSocket();
+    
+    if (socket && socket.connected) {
+      socket.emit('change_status', { 
+        id: operatorStorage.operatorId,
+        status: newStatus
+      });
+      setOperatorStatus(newStatus); // Update local state
+    }
+  };
+  
   // Render dashboard
   return (
     <div className="h-screen bg-gray-100 flex flex-col overflow-hidden">
@@ -297,12 +312,24 @@ function OperatorDashboard() {
             )}
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-        >
-          გასვლა
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleStatusToggle}
+            className={`px-4 py-2 rounded ${
+              operatorStatus === 'active'
+                ? 'bg-yellow-500 hover:bg-yellow-600'
+                : 'bg-green-500 hover:bg-green-600'
+            } text-white`}
+          >
+            {operatorStatus === 'active' ? 'პაუზა' : 'გაგრძელება'}
+          </button>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+          >
+            გასვლა
+          </button>
+        </div>
       </header>
       
       {/* Loading state */}
