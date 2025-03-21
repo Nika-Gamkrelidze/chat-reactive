@@ -91,6 +91,12 @@ function ClientChat() {
       console.log('Session update received in ClientChat:', sessionData);
       setIsLoading(false);
       
+      // Add this new condition
+      if (sessionData.showFeedback) {
+        setShowFeedbackModal(true);
+        return;
+      }
+      
       // Handle operator assignment
       if (sessionData.operator) {
         setHasOperator(true);
@@ -270,14 +276,12 @@ function ClientChat() {
   
   const handleEndChat = () => {
     const endChatData = {
-      clientId,
-      clientName,
-      clientNumber,
-      roomId
+      userId: clientId,
+      roomId,
+      userType: 'client'
     };
     
     sendClientEndChat(endChatData);
-    setShowFeedbackModal(true);
   };
   
   const handleSubmitFeedback = () => {
@@ -306,6 +310,10 @@ function ClientChat() {
     
     // Navigate to login
     navigate('/client/login');
+  };
+
+  const handleShowFeedbackModal = () => {  
+    setShowFeedbackModal(true);
   };
   
   if (isLoading) {

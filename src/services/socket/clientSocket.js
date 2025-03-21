@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 import config from '../../config/env';
 
+
 let socket = null;
 let messageHandler = null;
 let sessionHandler = null;
@@ -272,6 +273,14 @@ export const createClientSocket = () => {
         sessionHandler(data);
       }
     });
+
+    socket.on('ask_for_feedback', () => {
+      // Use the existing session handler to communicate back to the component
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({ showFeedback: true });
+      }
+    });
+
   }
   
   return socket;
@@ -439,7 +448,7 @@ export const clearClientData = () => {
 // Send end chat notification to server
 export const sendClientEndChat = (clientData) => {
   if (socket && socket.connected) {
-    socket.emit('client-ended-chat', clientData);
+    socket.emit('end-chat', clientData);
   }
 };
 
