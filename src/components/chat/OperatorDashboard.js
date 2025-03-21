@@ -145,7 +145,11 @@ function OperatorDashboard() {
       if (sessionData.activeRooms && Array.isArray(sessionData.activeRooms)) {
         const clients = sessionData.activeRooms
           .filter(room => room.client)
-          .map(room => room.client);
+          .map(room => ({
+            ...room.client,
+            status: room.status || 'active', // Add status from room
+            roomId: room.roomId
+          }));
           
         if (clients.length > 0) {
           setActiveClients(clients);
@@ -342,20 +346,8 @@ function OperatorDashboard() {
       }
       operatorStorage.saveToStorage();
       
-      // Clean up room ID and active clients from session storage
+      // Clean up room ID from session storage
       sessionStorage.removeItem(`room_${selectedClient.id}`);
-      
-      // Clean up active clients from session storage
-      const activeClientsData = sessionStorage.getItem('activeClients');
-      if (activeClientsData) {
-        try {
-          const activeClients = JSON.parse(activeClientsData);
-          const updatedActiveClients = activeClients.filter(client => client.id !== selectedClient.id);
-          sessionStorage.setItem('activeClients', JSON.stringify(updatedActiveClients));
-        } catch (error) {
-          console.error('Error updating activeClients in sessionStorage:', error);
-        }
-      }
     }
   };
   
@@ -426,8 +418,24 @@ function OperatorDashboard() {
                           : 'bg-white hover:bg-gray-50'
                       }`}
                     >
-                      <div className="font-medium">{client.name}</div>
-                      <div className="text-sm text-gray-500">{client.number}</div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{client.name}</div>
+                          <div className="text-sm text-gray-500">{client.number}</div>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="text-xs text-gray-500 mr-2">
+                            {client.status === 'active' ? 'აქტიური' : 'დასრულებული'}
+                          </span>
+                          <span className={`w-2 h-2 rounded-full ${
+                            client.status === 'active' 
+                              ? 'bg-green-500' 
+                              : client.status === 'closed'
+                                ? 'bg-red-500'
+                                : 'bg-yellow-500'
+                          }`}></span>
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -492,18 +500,18 @@ function OperatorDashboard() {
                       type="text"
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
-                      placeholder="შეიყვანეთ შეტყობინება..."
+                      placeholder={selectedClient.status === 'closed' ? "ჩათი დასრულებულია" : "შეიყვანეთ შეტყობინება..."}
                       className="flex-1 p-2 border rounded-l-lg"
-                      disabled={!isConnected}
+                      disabled={!isConnected || selectedClient.status === 'closed'}
                     />
                     <button 
                       type="submit" 
                       className={`px-6 py-2 rounded-r-lg ${
-                        isConnected 
+                        isConnected && selectedClient.status !== 'closed'
                           ? 'bg-blue-500 text-white hover:bg-blue-600' 
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       }`}
-                      disabled={!isConnected}
+                      disabled={!isConnected || selectedClient.status === 'closed'}
                     >
                       გაგზავნა
                     </button>
