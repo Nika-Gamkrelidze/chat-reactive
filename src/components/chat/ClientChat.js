@@ -282,21 +282,16 @@ function ClientChat() {
     };
     
     sendClientEndChat(endChatData);
-    setRoomId(null);
-    setHasOperator(false);
-    setOperatorInfo(null);
-    setIsConnected(false);
+    
+    // Show feedback modal instead of immediately ending chat
+    setShowFeedbackModal(true);
   };
   
   const handleSubmitFeedback = () => {
     const feedbackData = {
-      clientId,
-      clientNumber,
-      clientName,
-      feedbackScore,
-      feedbackComment,
-      operatorId: operatorInfo?.id,
-      operatorName: operatorInfo?.name
+      roomId,
+      score: feedbackScore,
+      comment: feedbackComment
     };
     
     sendClientFeedback(feedbackData);

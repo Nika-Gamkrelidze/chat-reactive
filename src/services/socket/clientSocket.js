@@ -449,12 +449,14 @@ export const clearClientData = () => {
 export const sendClientEndChat = (clientData) => {
   if (socket && socket.connected) {
     socket.emit('end-chat', clientData);
+    // Note: We don't disconnect here anymore as we need to wait for feedback submission
   }
 };
 
 // Send feedback to server
 export const sendClientFeedback = (feedbackData) => {
   if (socket && socket.connected) {
+    // feedbackData should contain: { roomId, score, comment }
     socket.emit('client-feedback', feedbackData);
     // Cleanup after sending feedback
     cleanupClientSocket();
