@@ -204,7 +204,7 @@ function OperatorDashboard() {
       setClientQueueHandler(null);
       setSessionHandler(null);
     };
-  }, [navigate, selectedClient]);
+  }, [navigate]);
   
   // Handle client selection
   const handleClientSelect = (client) => {
@@ -291,6 +291,74 @@ function OperatorDashboard() {
     }
   };
   
+  // Handle ending a chat
+  const handleEndChat = () => {
+    if (!selectedClient || !isConnected) return;
+    
+    // Get room ID from the selected client or from the messages
+    let roomId = selectedClient.roomId;
+    
+    // If roomId is not directly available in the client object, try to find it in messages
+    if (!roomId && messages[selectedClient.id] && messages[selectedClient.id].length > 0) {
+      roomId = messages[selectedClient.id][0].roomId;
+    }
+    
+    // If still no roomId, try to get it from operatorStorage
+    if (!roomId && operatorStorage.clients && operatorStorage.clients[selectedClient.id]) {
+      roomId = operatorStorage.clients[selectedClient.id].roomId;
+    }
+    
+    if (!roomId) {
+      console.error('Cannot end chat: room ID not available for client', selectedClient.id);
+      alert('Cannot end chat: connection issue. Please try again later.');
+      return;
+    }
+    
+    const socket = getOperatorSocket();
+    if (socket && socket.connected) {
+      // Send end_chat event
+      socket.emit('end_chat', {
+        roomId,
+        userId: operatorStorage.operatorId,
+        userType: 'operator'
+      });
+      
+      // Clean up local state
+      setMessages(prev => {
+        const newMessages = { ...prev };
+        delete newMessages[selectedClient.id];
+        return newMessages;
+      });
+      
+      setActiveClients(prev => prev.filter(client => client.id !== selectedClient.id));
+      setSelectedClient(null);
+      
+      // Clean up from operatorStorage
+      if (operatorStorage.messages) {
+        delete operatorStorage.messages[selectedClient.id];
+      }
+      if (operatorStorage.clients) {
+        delete operatorStorage.clients[selectedClient.id];
+      }
+      operatorStorage.saveToStorage();
+      
+      // Clean up room ID and active clients from session storage
+      sessionStorage.removeItem(`room_${selectedClient.id}`);
+      
+      // Clean up active clients from session storage
+      const activeClientsData = sessionStorage.getItem('activeClients');
+      if (activeClientsData) {
+        try {
+          const activeClients = JSON.parse(activeClientsData);
+          const updatedActiveClients = activeClients.filter(client => client.id !== selectedClient.id);
+          sessionStorage.setItem('activeClients', JSON.stringify(updatedActiveClients));
+        } catch (error) {
+          console.error('Error updating activeClients in sessionStorage:', error);
+        }
+      }
+    }
+  };
+  
   // Render dashboard
   return (
     <div className="h-screen bg-gray-100 flex flex-col overflow-hidden">
@@ -374,11 +442,18 @@ function OperatorDashboard() {
             {selectedClient ? (
               <>
                 {/* Chat header */}
-                <div className="bg-white border-b p-4 flex-shrink-0">
+                <div className="bg-white border-b p-4 flex-shrink-0 flex justify-between items-center">
                   <div>
                     <h2 className="font-medium">{selectedClient.name}</h2>
                     <p className="text-sm text-gray-500">{selectedClient.number}</p>
                   </div>
+                  <button
+                    onClick={handleEndChat}
+                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                    disabled={!isConnected}
+                  >
+                    ჩათის დასრულება
+                  </button>
                 </div>
                 
                 {/* Messages */}

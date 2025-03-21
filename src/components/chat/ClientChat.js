@@ -282,6 +282,10 @@ function ClientChat() {
     };
     
     sendClientEndChat(endChatData);
+    setRoomId(null);
+    setHasOperator(false);
+    setOperatorInfo(null);
+    setIsConnected(false);
   };
   
   const handleSubmitFeedback = () => {
