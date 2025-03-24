@@ -11,7 +11,8 @@ import {
   sendClientEndChat,
   sendClientFeedback,
   cleanupClientSocket,
-  isSocketConnected
+  isSocketConnected,
+  sendClientCallbackRequest
 } from '../../services/socket/clientSocket';
 import { MdCallEnd } from 'react-icons/md';
 import { IoMdExit } from 'react-icons/io';
@@ -315,6 +316,27 @@ function ClientChat() {
     setShowFeedbackModal(true);
   };
   
+  const handleCallbackRequest = () => {
+    const currentRoomId = sessionStorage.getItem('roomId');
+    
+    if (!currentRoomId) {
+      console.error('Cannot send callback request: room ID not available');
+      return;
+    }
+
+    const callbackData = {
+      userId: clientId,
+      roomId: currentRoomId,
+      name: clientName,
+      number: clientNumber
+    };
+    
+    sendClientCallbackRequest(callbackData);
+    
+    // Navigate to login
+    navigate('/client/login');
+  };
+  
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
@@ -345,13 +367,24 @@ function ClientChat() {
                 : 'თქვენ ხართ რიგში')}
             </p>
           </div>
-          <button
-            onClick={handleEndChat}
-            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
-          >
-            <IoMdExit className="text-xl" />
-            <span>ჩათის დასრულება</span>
-          </button>
+          <div className="flex gap-2">
+            {!hasOperator && (
+              <button
+                onClick={handleCallbackRequest}
+                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
+              >
+                <FiPhoneOff className="text-xl" />
+                <span>ზარის მოთხოვნა</span>
+              </button>
+            )}
+            <button
+              onClick={handleEndChat}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
+            >
+              <IoMdExit className="text-xl" />
+              <span>ჩათის დასრულება</span>
+            </button>
+          </div>
         </div>
         
         {/* Messages */}

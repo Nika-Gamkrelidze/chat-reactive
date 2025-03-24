@@ -480,3 +480,12 @@ export const cleanupClientSocket = () => {
   // Clear storage
   clientStorage.clear();
 };
+
+// Send callback request to server
+export const sendClientCallbackRequest = (callbackData) => {
+  if (socket && socket.connected) {
+    socket.emit('submit_callback', callbackData);
+    // Cleanup after sending callback request
+    cleanupClientSocket();
+  }
+};
