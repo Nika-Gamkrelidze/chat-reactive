@@ -38,6 +38,19 @@ function OperatorDashboard() {
   const clientListHandlerRef = useRef(null);
   const clientQueueHandlerRef = useRef(null);
   const sessionHandlerRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+
+  // Function to scroll to bottom of messages
+  const scrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Effect to scroll when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // Initialize socket and set up event handlers
   useEffect(() => {
@@ -103,6 +116,9 @@ function OperatorDashboard() {
             sentByOperator: message.senderId === operatorStorage.operatorId
           }].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
           
+          // Scroll to bottom after state update
+          setTimeout(scrollToBottom, 0);
+          
           return {
             ...prevMessages,
             [clientId]: updatedClientMessages
@@ -138,7 +154,10 @@ function OperatorDashboard() {
       
       // Handle operator data
       if (sessionData.operator) {
-        // Update operator info if needed
+        // Update operator status if provided
+        if (sessionData.operator.status) {
+          setOperatorStatus(sessionData.operator.status);
+        }
       }
       
       // Handle active rooms from reconnection
@@ -227,6 +246,9 @@ function OperatorDashboard() {
       console.log('Requesting messages for client:', client.id);
       // You might want to add a function to request messages for a specific client
     }
+
+    // Scroll to bottom when selecting a client
+    setTimeout(scrollToBottom, 0);
   };
   
   // Handle accepting a client from the queue
@@ -283,7 +305,14 @@ function OperatorDashboard() {
   
   // Add handler for status toggle
   const handleStatusToggle = () => {
-    const newStatus = operatorStatus === 'active' ? 'away' : 'active';
+    // Cycle through states: active -> paused -> inactive -> active
+    const statusMap = {
+      'active': 'paused',
+      'paused': 'inactive',
+      'inactive': 'active'
+    };
+    
+    const newStatus = statusMap[operatorStatus] || 'active';
     const socket = getOperatorSocket();
     
     if (socket && socket.connected) {
@@ -291,7 +320,7 @@ function OperatorDashboard() {
         id: operatorStorage.operatorId,
         status: newStatus
       });
-      setOperatorStatus(newStatus); // Update local state
+      setOperatorStatus(newStatus);
     }
   };
   
@@ -327,27 +356,22 @@ function OperatorDashboard() {
         userType: 'operator'
       });
       
-      // Clean up local state
-      setMessages(prev => {
-        const newMessages = { ...prev };
-        delete newMessages[selectedClient.id];
-        return newMessages;
-      });
+      // Update client roomStatus in active clients list
+      setActiveClients(prev => prev.map(client => 
+        client.id === selectedClient.id 
+          ? { ...client, roomStatus: 'closed' }
+          : client
+      ));
       
-      setActiveClients(prev => prev.filter(client => client.id !== selectedClient.id));
-      setSelectedClient(null);
+      // Update client roomStatus in operator storage
+      if (operatorStorage.clients && operatorStorage.clients[selectedClient.id]) {
+        operatorStorage.clients[selectedClient.id].roomStatus = 'closed';
+      }
       
-      // Clean up from operatorStorage
-      if (operatorStorage.messages) {
-        delete operatorStorage.messages[selectedClient.id];
-      }
-      if (operatorStorage.clients) {
-        delete operatorStorage.clients[selectedClient.id];
-      }
+      // Update selected client roomStatus
+      setSelectedClient(prev => prev ? { ...prev, roomStatus: 'closed' } : null);
+      
       operatorStorage.saveToStorage();
-      
-      // Clean up room ID from session storage
-      sessionStorage.removeItem(`room_${selectedClient.id}`);
     }
   };
   
@@ -360,9 +384,22 @@ function OperatorDashboard() {
           <h1 className="text-xl font-semibold text-gray-800">ოპერატორის პანელი</h1>
           <div className="text-sm text-gray-500">
             {isConnected ? (
-              <span className="text-green-500 flex items-center">
-                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                დაკავშირებული
+              <span className={`flex items-center ${
+                operatorStatus === 'active' ? 'text-green-500' :
+                operatorStatus === 'paused' ? 'text-yellow-500' :
+                operatorStatus === 'inactive' ? 'text-red-500' :
+                'text-gray-500'
+              }`}>
+                <span className={`w-2 h-2 rounded-full mr-2 ${
+                  operatorStatus === 'active' ? 'bg-green-500' :
+                  operatorStatus === 'paused' ? 'bg-yellow-500' :
+                  operatorStatus === 'inactive' ? 'bg-red-500' :
+                  'bg-gray-500'
+                }`}></span>
+                {operatorStatus === 'active' ? 'აქტიური' :
+                 operatorStatus === 'paused' ? 'პაუზაზე' :
+                 operatorStatus === 'inactive' ? 'არააქტიური' :
+                 'უცნობი სტატუსი'}
               </span>
             ) : (
               <span className="text-red-500 flex items-center">
@@ -375,13 +412,15 @@ function OperatorDashboard() {
         <div className="flex gap-2">
           <button
             onClick={handleStatusToggle}
-            className={`px-4 py-2 rounded ${
-              operatorStatus === 'active'
-                ? 'bg-yellow-500 hover:bg-yellow-600'
-                : 'bg-green-500 hover:bg-green-600'
-            } text-white`}
+            className={`px-4 py-2 rounded text-white ${
+              operatorStatus === 'active' ? 'bg-yellow-500 hover:bg-yellow-600' :
+              operatorStatus === 'paused' ? 'bg-red-500 hover:bg-red-600' :
+              'bg-green-500 hover:bg-green-600'
+            }`}
           >
-            {operatorStatus === 'active' ? 'პაუზა' : 'გაგრძელება'}
+            {operatorStatus === 'active' ? 'პაუზაზე გადასვლა' :
+             operatorStatus === 'paused' ? 'გათიშვა' :
+             'გააქტიურება'}
           </button>
           <button
             onClick={handleLogout}
@@ -425,12 +464,12 @@ function OperatorDashboard() {
                         </div>
                         <div className="flex items-center">
                           <span className="text-xs text-gray-500 mr-2">
-                            {client.status === 'active' ? 'აქტიური' : 'დასრულებული'}
+                            {client.roomStatus === 'active' ? 'აქტიური' : 'დასრულებული'}
                           </span>
                           <span className={`w-2 h-2 rounded-full ${
-                            client.status === 'active' 
+                            client.roomStatus === 'active' 
                               ? 'bg-green-500' 
-                              : client.status === 'closed'
+                              : client.roomStatus === 'closed'
                                 ? 'bg-red-500'
                                 : 'bg-yellow-500'
                           }`}></span>
@@ -465,7 +504,10 @@ function OperatorDashboard() {
                 </div>
                 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                <div 
+                  ref={messagesContainerRef}
+                  className="flex-1 overflow-y-auto p-4 bg-gray-50"
+                >
                   {messages[selectedClient.id] && messages[selectedClient.id].length > 0 ? (
                     messages[selectedClient.id].map((message, index) => (
                       <div 
@@ -500,18 +542,18 @@ function OperatorDashboard() {
                       type="text"
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
-                      placeholder={selectedClient.status === 'closed' ? "ჩათი დასრულებულია" : "შეიყვანეთ შეტყობინება..."}
+                      placeholder={selectedClient.roomStatus === 'closed' ? "ჩათი დასრულებულია" : "შეიყვანეთ შეტყობინება..."}
                       className="flex-1 p-2 border rounded-l-lg"
-                      disabled={!isConnected || selectedClient.status === 'closed'}
+                      disabled={!isConnected || selectedClient.roomStatus === 'closed'}
                     />
                     <button 
                       type="submit" 
                       className={`px-6 py-2 rounded-r-lg ${
-                        isConnected && selectedClient.status !== 'closed'
+                        isConnected && selectedClient.roomStatus !== 'closed'
                           ? 'bg-blue-500 text-white hover:bg-blue-600' 
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       }`}
-                      disabled={!isConnected || selectedClient.status === 'closed'}
+                      disabled={!isConnected || selectedClient.roomStatus === 'closed'}
                     >
                       გაგზავნა
                     </button>

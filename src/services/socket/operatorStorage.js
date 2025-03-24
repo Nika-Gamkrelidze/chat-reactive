@@ -99,12 +99,18 @@ class OperatorStorage {
     
     if (existingIndex === -1) {
       // Add new message
-      this.messages[clientId].push(message);
+      const updatedClientMessages = [...this.messages[clientId], {
+        ...message,
+        sentByOperator: message.senderId === this.operatorId
+      }].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       
-      // Sort messages by timestamp
-      this.messages[clientId].sort(
-        (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-      );
+      // Scroll to bottom after state update
+      setTimeout(scrollToBottom, 0);
+      
+      return {
+        ...this.messages,
+        [clientId]: updatedClientMessages
+      };
     } else {
       // Update existing message
       this.messages[clientId][existingIndex] = {
