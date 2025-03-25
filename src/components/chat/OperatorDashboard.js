@@ -308,8 +308,7 @@ function OperatorDashboard() {
     // Cycle through states: active -> paused -> inactive -> active
     const statusMap = {
       'active': 'paused',
-      'paused': 'inactive',
-      'inactive': 'active'
+      'paused': 'active',
     };
     
     const newStatus = statusMap[operatorStatus] || 'active';
@@ -353,24 +352,40 @@ function OperatorDashboard() {
       socket.emit('end_chat', {
         roomId,
         userId: operatorStorage.operatorId,
-        userType: 'operator'
+        userType: 'operator',
+        clientId: selectedClient.id
       });
       
-      // Update client roomStatus in active clients list
-      setActiveClients(prev => prev.map(client => 
-        client.id === selectedClient.id 
-          ? { ...client, roomStatus: 'closed' }
-          : client
-      ));
+      // Remove client from active clients list in state
+      const updatedActiveClients = activeClients.filter(client => client.id !== selectedClient.id);
+      setActiveClients(updatedActiveClients);
       
-      // Update client roomStatus in operator storage
-      if (operatorStorage.clients && operatorStorage.clients[selectedClient.id]) {
-        operatorStorage.clients[selectedClient.id].roomStatus = 'closed';
+      // Update operatorStorage active clients
+      operatorStorage.activeClients = updatedActiveClients;
+      
+      // Remove client from operatorStorage.clients
+      if (operatorStorage.clients) {
+        delete operatorStorage.clients[selectedClient.id];
       }
       
-      // Update selected client roomStatus
-      setSelectedClient(prev => prev ? { ...prev, roomStatus: 'closed' } : null);
+      // Remove messages for this client from state
+      const updatedMessages = { ...messages };
+      delete updatedMessages[selectedClient.id];
+      setMessages(updatedMessages);
       
+      // Remove messages from operatorStorage
+      if (operatorStorage.messages) {
+        delete operatorStorage.messages[selectedClient.id];
+      }
+      
+      // Clear selected client
+      setSelectedClient(null);
+      
+      // Update session storage
+      sessionStorage.setItem('activeClients', JSON.stringify(updatedActiveClients));
+      sessionStorage.setItem('operatorMessages', JSON.stringify(updatedMessages));
+      
+      // Save all changes to operatorStorage
       operatorStorage.saveToStorage();
     }
   };
@@ -414,12 +429,10 @@ function OperatorDashboard() {
             onClick={handleStatusToggle}
             className={`px-4 py-2 rounded text-white ${
               operatorStatus === 'active' ? 'bg-yellow-500 hover:bg-yellow-600' :
-              operatorStatus === 'paused' ? 'bg-red-500 hover:bg-red-600' :
               'bg-green-500 hover:bg-green-600'
             }`}
           >
             {operatorStatus === 'active' ? 'პაუზაზე გადასვლა' :
-             operatorStatus === 'paused' ? 'გათიშვა' :
              'გააქტიურება'}
           </button>
           <button

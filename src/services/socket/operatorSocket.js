@@ -432,6 +432,41 @@ export const createOperatorSocket = () => {
       }
     });
 
+    // Handle chat end event
+    socket.on('chat_end', (data) => {
+      if (data && data.clientId) {
+        console.log('Chat end event received for client:', data.clientId);
+        
+        // Remove client from storage
+        if (operatorStorage.clients && operatorStorage.clients[data.clientId]) {
+          delete operatorStorage.clients[data.clientId];
+        }
+        
+        // Remove client from active clients list
+        operatorStorage.activeClients = operatorStorage.activeClients.filter(
+          client => client.id !== data.clientId
+        );
+        
+        // Remove messages for this client
+        if (operatorStorage.messages && operatorStorage.messages[data.clientId]) {
+          delete operatorStorage.messages[data.clientId];
+        }
+        
+        // Clear any stored room data
+        if (operatorStorage.rooms && operatorStorage.rooms[data.clientId]) {
+          delete operatorStorage.rooms[data.clientId];
+        }
+        
+        // Save updated storage
+        operatorStorage.saveToStorage();
+        
+        // Notify client list handler with updated list
+        if (clientListHandler && typeof clientListHandler === 'function') {
+          clientListHandler([...operatorStorage.activeClients]);
+        }
+      }
+    });
+
     // Handle client disconnection
     socket.on('client_disconnected', (data) => {
       if (data && data.clientId) {
