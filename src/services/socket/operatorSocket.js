@@ -467,6 +467,54 @@ export const createOperatorSocket = () => {
       }
     });
 
+    // Handle chat ended event (when ended by either party)
+    socket.on('chat_ended', (data) => {
+      if (data && data.roomId) {
+        console.log('Chat ended event received for room:', data.roomId);
+        
+        // Find client by roomId in our storage
+        let clientId = null;
+        if (operatorStorage.clients) {
+          for (const [id, client] of Object.entries(operatorStorage.clients)) {
+            if (client.roomId === data.roomId) {
+              clientId = id;
+              break;
+            }
+          }
+        }
+        
+        if (clientId) {
+          // Remove client from storage
+          if (operatorStorage.clients) {
+            delete operatorStorage.clients[clientId];
+          }
+          
+          // Remove client from active clients list
+          operatorStorage.activeClients = operatorStorage.activeClients.filter(
+            client => client.id !== clientId
+          );
+          
+          // Remove messages for this client
+          if (operatorStorage.messages && operatorStorage.messages[clientId]) {
+            delete operatorStorage.messages[clientId];
+          }
+          
+          // Clear any stored room data
+          if (operatorStorage.rooms && operatorStorage.rooms[clientId]) {
+            delete operatorStorage.rooms[clientId];
+          }
+          
+          // Save updated storage
+          operatorStorage.saveToStorage();
+          
+          // Notify client list handler with updated list
+          if (clientListHandler && typeof clientListHandler === 'function') {
+            clientListHandler([...operatorStorage.activeClients]);
+          }
+        }
+      }
+    });
+
     // Handle client disconnection
     socket.on('client_disconnected', (data) => {
       if (data && data.clientId) {
