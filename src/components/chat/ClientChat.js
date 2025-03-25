@@ -374,7 +374,7 @@ function ClientChat() {
                 className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
               >
                 <FiPhoneOff className="text-xl" />
-                <span>ზარის მოთხოვნა</span>
+                <span className='hidden md:block'>ზარის მოთხოვნა</span>
               </button>
             )}
             <button
@@ -382,7 +382,7 @@ function ClientChat() {
               className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
             >
               <IoMdExit className="text-xl" />
-              <span>ჩათის დასრულება</span>
+              <span className='hidden md:block' >ჩათის დასრულება</span>
             </button>
           </div>
         </div>

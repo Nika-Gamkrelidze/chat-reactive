@@ -464,12 +464,12 @@ function OperatorDashboard() {
                         </div>
                         <div className="flex items-center">
                           <span className="text-xs text-gray-500 mr-2">
-                            {client.roomStatus === 'active' ? 'აქტიური' : 'დასრულებული'}
+                            {client.status === 'active' ? 'აქტიური' : 'დასრულებული'}
                           </span>
                           <span className={`w-2 h-2 rounded-full ${
-                            client.roomStatus === 'active' 
+                            client.status === 'active' 
                               ? 'bg-green-500' 
-                              : client.roomStatus === 'closed'
+                              : client.status === 'closed'
                                 ? 'bg-red-500'
                                 : 'bg-yellow-500'
                           }`}></span>
