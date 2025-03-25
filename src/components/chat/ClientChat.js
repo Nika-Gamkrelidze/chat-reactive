@@ -363,8 +363,8 @@ function ClientChat() {
             <p className="text-sm text-primary-100">
               {!isConnected && <span className="text-red-200">⚠️ ხელახლა დაკავშირება...</span>}
               {isConnected && (hasOperator 
-                ? 'თქვენ დაკავშირებული ხართ ოპერატორთან'
-                : 'თქვენ ხართ რიგში')}
+                ? `${clientName}, თქვენ დაკავშირებული ხართ ოპერატორთან `
+                : `${clientName}, თქვენ ხართ რიგში`)}
             </p>
           </div>
           <div className="flex gap-2">
