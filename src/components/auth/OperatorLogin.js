@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { initOperatorSocket, setSessionHandler } from '../../services/socket/operatorSocket';
 
@@ -10,6 +10,7 @@ function OperatorLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionReceived, setSessionReceived] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   
   useEffect(() => {
@@ -28,7 +29,17 @@ function OperatorLogin() {
         console.error('Error parsing stored user:', error);
       }
     }
-  }, [navigate]);
+
+    // Check for URL parameters for automatic login
+    const urlUsername = searchParams.get('name');
+    const urlNumber = searchParams.get('number');
+    
+    if (urlUsername && urlNumber) {
+      setUsername(urlUsername);
+      setNumber(urlNumber);
+      handleAutomaticLogin(urlUsername, urlNumber);
+    }
+  }, [navigate, searchParams]);
   
   // Handle navigation after session is received
   useEffect(() => {
@@ -37,8 +48,7 @@ function OperatorLogin() {
     }
   }, [sessionReceived, navigate]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleAutomaticLogin = async (username, number) => {
     setError('');
     setIsLoading(true);
     
@@ -55,8 +65,6 @@ function OperatorLogin() {
           sessionStorage.setItem('operatorName', operator.name || username);
           sessionStorage.setItem('operatorNumber', operator.number || number);
 
-          // set socket auth id
-          
           // Login in auth context with correct role
           login({
             id: operator.id,
@@ -74,13 +82,16 @@ function OperatorLogin() {
       
       // Initialize socket connection
       initOperatorSocket(username, number);
-      
-      // Note: We don't navigate here - we wait for the session event
     } catch (error) {
       console.error('Login error:', error);
       setError('Failed to connect. Please try again later.');
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    handleAutomaticLogin(username, number);
   };
 
   return (
