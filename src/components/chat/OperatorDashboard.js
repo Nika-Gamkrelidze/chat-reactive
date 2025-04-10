@@ -356,22 +356,21 @@ function OperatorDashboard() {
   
   // Add handler for status toggle
   const handleStatusToggle = () => {
-    // Cycle through states: active -> paused -> inactive -> active
-    const statusMap = {
-      'active': 'paused',
-      'paused': 'inactive',
-      'inactive': 'active'
-    };
+    // Toggle between 'active' and 'paused'
+    const newStatus = operatorStatus === 'active' ? 'paused' : 'active';
     
-    const newStatus = statusMap[operatorStatus] || 'active';
     const socket = getOperatorSocket();
     
     if (socket && socket.connected) {
+      console.log(`Requesting status change to: ${newStatus}`); // Add log
       socket.emit('change_status', { 
         id: operatorStorage.operatorId,
         status: newStatus
       });
+      // Update state optimistically, server should confirm via session update if needed
       setOperatorStatus(newStatus);
+    } else {
+        console.warn('Cannot change status: socket not connected.'); // Add warning
     }
   };
   
@@ -465,13 +464,13 @@ function OperatorDashboard() {
             onClick={handleStatusToggle}
             className={`px-4 py-2 rounded text-white ${
               operatorStatus === 'active' ? 'bg-yellow-500 hover:bg-yellow-600' :
-              operatorStatus === 'paused' ? 'bg-red-500 hover:bg-red-600' :
-              'bg-green-500 hover:bg-green-600'
+              'bg-green-500 hover:bg-green-600' // Only active/paused states
             }`}
+            disabled={!isConnected} // Disable if not connected
           >
             {operatorStatus === 'active' ? 'პაუზაზე გადასვლა' :
-             operatorStatus === 'paused' ? 'გათიშვა' :
-             'გააქტიურება'}
+             'გააქტიურება' // Only two options needed
+            }
           </button>
           <button
             onClick={handleLogout}
