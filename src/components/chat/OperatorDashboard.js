@@ -91,18 +91,18 @@ function OperatorDashboard() {
     messageHandlerRef.current = (message) => {
       console.log('Message received in dashboard:', message);
       
-      // Handle typing indicator
+      // Skip typing indicators for unread counts
       if (message.type === 'typing') {
-        // Handle typing indicator if needed
         return;
       }
-      
+
+      const clientId = message.clientId;
+      // Skip if we don't have a clientId
+      if (!clientId) return;
+
+      const isFromOperator = message.senderId === operatorStorage.operatorId;
+
       setMessages(prevMessages => {
-        const clientId = message.clientId;
-        
-        // Skip if we don't have a clientId
-        if (!clientId) return prevMessages;
-        
         // Initialize or get existing messages for this client
         const clientMessages = prevMessages[clientId] || [];
         
@@ -113,7 +113,7 @@ function OperatorDashboard() {
           // Add new message
           const updatedClientMessages = [...clientMessages, {
             ...message,
-            sentByOperator: message.senderId === operatorStorage.operatorId
+            sentByOperator: isFromOperator
           }].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
           
           // Scroll to bottom after state update
@@ -127,17 +127,46 @@ function OperatorDashboard() {
         
         return prevMessages;
       });
+
+      // --- Add logic to update unread count ---
+      // Increment unread count only for messages from the client
+      // and only if the client is not currently selected
+      if (!isFromOperator) {
+         setActiveClients(prevClients => 
+           prevClients.map(client => {
+             if (client.id === clientId && (!selectedClient || selectedClient.id !== clientId)) {
+               // Increment unread count, initializing if it doesn't exist
+               const newUnreadCount = (client.unreadCount || 0) + 1;
+               return { ...client, unreadCount: newUnreadCount };
+             }
+             return client;
+           })
+         );
+      }
+      // --- End unread count logic ---
     };
     
     // Define client list handler
-    clientListHandlerRef.current = (clients) => {
-      console.log('Active clients updated:', clients);
-      setActiveClients(clients);
+    clientListHandlerRef.current = (clientsFromServer) => {
+      console.log('Active clients updated:', clientsFromServer);
       
-      // If we have a selected client that's no longer active, deselect it
-      if (selectedClient && !clients.some(c => c.id === selectedClient.id)) {
-        setSelectedClient(null);
-      }
+      setActiveClients(prevClients => {
+        // Create a map of existing clients for quick lookup of unread counts
+        const existingClientMap = new Map(prevClients.map(c => [c.id, c.unreadCount || 0]));
+        
+        // Map the new list, preserving existing unread counts
+        const updatedClients = clientsFromServer.map(newClient => ({
+          ...newClient,
+          unreadCount: existingClientMap.get(newClient.id) || 0 // Keep existing count or default to 0
+        }));
+
+        // If the currently selected client is no longer in the active list, deselect it
+        if (selectedClient && !updatedClients.some(c => c.id === selectedClient.id)) {
+          setSelectedClient(null);
+        }
+        
+        return updatedClients;
+      });
     };
     
     // Define client queue handler
@@ -171,8 +200,8 @@ function OperatorDashboard() {
             ...room.client, // Spread client details
             status: room.status || 'active', // Use room status, default to active
             roomId: room.roomId, // Ensure roomId is included
-            // Add roomStatus for consistency with other parts of the code using this field
-            roomStatus: room.status || 'active' 
+            roomStatus: room.status || 'active', // Add roomStatus for consistency
+            unreadCount: 0 // Initialize unread count
           }));
 
         // Initialize or update messages from active rooms
@@ -195,14 +224,23 @@ function OperatorDashboard() {
         // Map activeClients, ensuring a default status if missing
         clientsToSet = sessionData.activeClients.map(client => ({
            ...client,
-           // Ensure roomStatus exists, default to 'active' if not provided
-           roomStatus: client.roomStatus || client.status || 'active' 
+           roomStatus: client.roomStatus || client.status || 'active', // Ensure roomStatus exists
+           unreadCount: client.unreadCount || 0 // Preserve existing or default to 0
         }));
       }
       
       // Update the state only if we have clients to set
+      // Merge with existing clients to preserve unread counts if possible
       if (clientsToSet.length > 0) {
-        setActiveClients(clientsToSet);
+        setActiveClients(prevClients => {
+            const existingClientMap = new Map(prevClients.map(c => [c.id, c.unreadCount || 0]));
+            return clientsToSet.map(newClient => ({
+                ...newClient,
+                // Prioritize unread count from new data if available (e.g., from fallback), 
+                // otherwise keep existing count or default to 0
+                unreadCount: newClient.unreadCount || existingClientMap.get(newClient.id) || 0 
+            }));
+        });
       }
 
       // Update messages state
@@ -247,10 +285,10 @@ function OperatorDashboard() {
     console.log('Selected client:', client);
     setSelectedClient(client);
     
-    // Mark client as read when selected
+    // Mark client as read and RESET unread count when selected
     setActiveClients(prevClients => 
       prevClients.map(c => 
-        c.id === client.id ? { ...c, hasUnread: false } : c
+        c.id === client.id ? { ...c, unreadCount: 0 } : c // Reset count to 0
       )
     );
     
@@ -464,19 +502,28 @@ function OperatorDashboard() {
                     <li 
                       key={client.id}
                       onClick={() => handleClientSelect(client)}
-                      className={`p-2 border rounded cursor-pointer ${
+                      className={`p-2 border rounded cursor-pointer flex justify-between items-center ${ // Use flex for layout
                         selectedClient && selectedClient.id === client.id
                           ? 'bg-blue-50 border-blue-200'
                           : 'bg-white hover:bg-gray-50'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium">{client.name}</div>
-                          <div className="text-sm text-gray-500">{client.number}</div>
-                        </div>
+                      {/* Client Info */}
+                      <div>
+                        <div className="font-medium">{client.name}</div>
+                        <div className="text-sm text-gray-500">{client.number}</div>
+                      </div>
+                      {/* Status and Unread Count */}
+                      <div className="flex items-center space-x-2"> 
+                        {/* Unread Count Badge - Show only if count > 0 AND not selected */}
+                        {client.unreadCount > 0 && (!selectedClient || selectedClient.id !== client.id) && (
+                          <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                            {client.unreadCount}
+                          </span>
+                        )}
+                        {/* Status Indicator */}
                         <div className="flex items-center">
-                          <span className="text-xs text-gray-500 mr-2">
+                          <span className="text-xs text-gray-500 mr-1"> {/* Reduced margin */}
                             {client.roomStatus === 'active' ? 'აქტიური' : 'დასრულებული'}
                           </span>
                           <span className={`w-2 h-2 rounded-full ${
@@ -484,7 +531,7 @@ function OperatorDashboard() {
                               ? 'bg-green-500' 
                               : client.roomStatus === 'closed'
                                 ? 'bg-red-500'
-                                : 'bg-yellow-500'
+                                : 'bg-yellow-500' // Keep yellow for potential other statuses
                           }`}></span>
                         </div>
                       </div>
