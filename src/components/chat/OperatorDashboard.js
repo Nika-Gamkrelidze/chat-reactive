@@ -160,40 +160,53 @@ function OperatorDashboard() {
         }
       }
       
-      // Handle active rooms from reconnection
+      let clientsToSet = [];
+      let messagesToSet = messages; // Start with existing messages
+
+      // Handle active rooms first as they contain specific status and messages
       if (sessionData.activeRooms && Array.isArray(sessionData.activeRooms)) {
-        const clients = sessionData.activeRooms
-          .filter(room => room.client)
+        clientsToSet = sessionData.activeRooms
+          .filter(room => room.client) // Ensure room has a client object
           .map(room => ({
-            ...room.client,
-            status: room.status || 'active', // Add status from room
-            roomId: room.roomId
+            ...room.client, // Spread client details
+            status: room.status || 'active', // Use room status, default to active
+            roomId: room.roomId, // Ensure roomId is included
+            // Add roomStatus for consistency with other parts of the code using this field
+            roomStatus: room.status || 'active' 
           }));
-          
-        if (clients.length > 0) {
-          setActiveClients(clients);
-        }
-        
-        // Initialize messages from active rooms
-        const messagesMap = {};
+
+        // Initialize or update messages from active rooms
+        const messagesMap = { ...messagesToSet }; // Start with existing messages
         sessionData.activeRooms.forEach(room => {
-          if (room.client && room.messages) {
+          if (room.client && room.messages && room.client.id) {
+            // Ensure messages are mapped correctly with sentByOperator flag
             messagesMap[room.client.id] = room.messages.map(msg => ({
               ...msg,
-              sentByOperator: msg.senderId === sessionData.operator.id
-            }));
+              sentByOperator: msg.senderId === sessionData.operator?.id, // Use optional chaining for safety
+              clientId: room.client.id // Ensure clientId is present
+            })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
           }
         });
-        
-        if (Object.keys(messagesMap).length > 0) {
-          setMessages(messagesMap);
-        }
+        messagesToSet = messagesMap; // Update the messages to be set
+      } 
+      // Fallback: If activeRooms are not present or empty, try using activeClients
+      else if (sessionData.activeClients && Array.isArray(sessionData.activeClients)) {
+        console.log("Using sessionData.activeClients as fallback.");
+        // Map activeClients, ensuring a default status if missing
+        clientsToSet = sessionData.activeClients.map(client => ({
+           ...client,
+           // Ensure roomStatus exists, default to 'active' if not provided
+           roomStatus: client.roomStatus || client.status || 'active' 
+        }));
       }
       
-      // If we have active clients in the session data, update the state
-      if (sessionData.activeClients && Array.isArray(sessionData.activeClients)) {
-        setActiveClients(sessionData.activeClients);
+      // Update the state only if we have clients to set
+      if (clientsToSet.length > 0) {
+        setActiveClients(clientsToSet);
       }
+
+      // Update messages state
+      setMessages(messagesToSet);
       
       // If we have pending clients in the session data, update the state
       if (sessionData.pendingClients && Array.isArray(sessionData.pendingClients)) {
