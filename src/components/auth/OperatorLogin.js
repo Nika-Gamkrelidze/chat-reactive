@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { initOperatorSocket, setSessionHandler } from '../../services/socket/operatorSocket';
 
@@ -10,76 +10,100 @@ function OperatorLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionReceived, setSessionReceived] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   
+  const attemptLogin = useCallback(async (loginName, loginNumber) => {
+    setError('');
+    setIsLoading(true);
+    setSessionReceived(false);
+
+    try {
+      setSessionHandler((sessionData) => {
+        console.log('Session data received:', sessionData);
+
+        const { operator } = sessionData;
+
+        if (operator && operator.id) {
+          sessionStorage.setItem('operatorId', operator.id);
+          sessionStorage.setItem('operatorName', operator.name || loginName);
+          sessionStorage.setItem('operatorNumber', operator.number || loginNumber);
+
+          login({
+            id: operator.id,
+            name: operator.name || loginName,
+            number: operator.number || loginNumber,
+            role: 'operator'
+          });
+
+          console.log('Session received, will navigate to dashboard...');
+
+          setSessionReceived(true);
+        } else {
+          console.error('Session received but operator data is missing or invalid.');
+          setError('Login failed: Invalid session data received.');
+          setIsLoading(false);
+          sessionStorage.removeItem('operatorId');
+          sessionStorage.removeItem('operatorName');
+          sessionStorage.removeItem('operatorNumber');
+          sessionStorage.removeItem('user');
+        }
+      });
+
+      console.log(`Attempting to login with name: ${loginName}, number: ${loginNumber}`);
+      initOperatorSocket(loginName, loginNumber);
+
+    } catch (error) {
+      console.error('Login error during attemptLogin:', error);
+      setError('Failed to connect. Please try again later.');
+      setIsLoading(false);
+    }
+  }, [login]);
+
   useEffect(() => {
-    // Check if already logged in
-    const operatorName = sessionStorage.getItem('operatorName');
-    const operatorNumber = sessionStorage.getItem('operatorNumber');
+    const storedOperatorName = sessionStorage.getItem('operatorName');
+    const storedOperatorNumber = sessionStorage.getItem('operatorNumber');
     const storedUser = sessionStorage.getItem('user');
-    
-    if (operatorName && operatorNumber && storedUser) {
+
+    if (storedOperatorName && storedOperatorNumber && storedUser) {
       try {
         const user = JSON.parse(storedUser);
         if (user && user.role === 'operator') {
+          console.log('Already logged in via sessionStorage, navigating to dashboard.');
           navigate('/operator/dashboard', { replace: true });
+          return;
         }
       } catch (error) {
         console.error('Error parsing stored user:', error);
+        sessionStorage.removeItem('operatorName');
+        sessionStorage.removeItem('operatorNumber');
+        sessionStorage.removeItem('user');
       }
     }
-  }, [navigate]);
-  
-  // Handle navigation after session is received
+
+    const queryParams = new URLSearchParams(location.search);
+    const nameFromUrl = queryParams.get('name');
+    const numberFromUrl = queryParams.get('number');
+
+    if (nameFromUrl && numberFromUrl && !isLoading) {
+      console.log('Found name and number in URL, attempting auto-login.');
+      setUsername(nameFromUrl);
+      setNumber(numberFromUrl);
+      attemptLogin(nameFromUrl, numberFromUrl);
+    }
+  }, [navigate, location.search, attemptLogin, isLoading]);
+
   useEffect(() => {
     if (sessionReceived) {
+      console.log('Session received flag is true, navigating to dashboard.');
       navigate('/operator/dashboard', { replace: true });
     }
   }, [sessionReceived, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setIsLoading(true);
-    
-    try {
-      // Set up session handler before initializing socket
-      setSessionHandler((sessionData) => {
-        console.log('Session data received:', sessionData);
-
-        const {operator} = sessionData;
-        
-        // Store operator data in session storage - handle flattened structure
-        if (operator.id) {
-          sessionStorage.setItem('operatorId', operator.id);
-          sessionStorage.setItem('operatorName', operator.name || username);
-          sessionStorage.setItem('operatorNumber', operator.number || number);
-
-          // set socket auth id
-          
-          // Login in auth context with correct role
-          login({
-            id: operator.id,
-            name: operator.name || username,
-            number: operator.number || number,
-            role: 'operator'
-          });
-          
-          console.log('Session received, will navigate to dashboard...');
-          
-          // Set state to trigger navigation in the useEffect
-          setSessionReceived(true);
-        }
-      });
-      
-      // Initialize socket connection
-      initOperatorSocket(username, number);
-      
-      // Note: We don't navigate here - we wait for the session event
-    } catch (error) {
-      console.error('Login error:', error);
-      setError('Failed to connect. Please try again later.');
-      setIsLoading(false);
+    if (!isLoading) {
+      attemptLogin(username, number);
     }
   };
 
