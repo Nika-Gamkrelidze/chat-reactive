@@ -665,7 +665,7 @@ function OperatorDashboard() {
                             ? 'bg-blue-500 text-white' 
                             : 'bg-gray-200 text-gray-800'
                         }`}>
-                          {message.text}
+                          <span className="break-words">{message.text}</span>
                           <div className="text-xs mt-1 opacity-75">
                             {new Date(message.timestamp).toLocaleTimeString()}
                           </div>
