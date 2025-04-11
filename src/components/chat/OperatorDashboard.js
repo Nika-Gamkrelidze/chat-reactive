@@ -15,7 +15,9 @@ import {
   operatorStorage,
   getOperatorSocket,
   acceptClient,
-  setClientChatClosedHandler
+  setClientChatClosedHandler,
+  sendOperatorTypingEvent,
+  setTypingHandler
 } from '../../services/socket/operatorSocket';
 
 function OperatorDashboard() {
@@ -33,6 +35,9 @@ function OperatorDashboard() {
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [operatorStatus, setOperatorStatus] = useState('active');
   
+  // State to track client typing status { clientId: timeoutId | null }
+  const [clientTypingStatus, setClientTypingStatus] = useState({});
+  
   // Refs to prevent multiple effect runs
   const socketInitializedRef = useRef(false);
   const messageHandlerRef = useRef(null);
@@ -40,6 +45,8 @@ function OperatorDashboard() {
   const clientQueueHandlerRef = useRef(null);
   const sessionHandlerRef = useRef(null);
   const clientChatClosedHandlerRef = useRef(null);
+  const typingHandlerRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
   // Function to scroll to bottom of messages
@@ -93,11 +100,6 @@ function OperatorDashboard() {
     messageHandlerRef.current = (message) => {
       console.log('Message received in dashboard:', message);
       
-      // Skip typing indicators for unread counts
-      if (message.type === 'typing') {
-        return;
-      }
-
       const clientId = message.clientId;
       // Skip if we don't have a clientId
       if (!clientId) return;
@@ -269,12 +271,41 @@ function OperatorDashboard() {
       }
     };
     
+    // Define typing handler
+    typingHandlerRef.current = (typingData) => {
+      const { userId, isTyping } = typingData; // userId here is the clientId
+      console.log(`Client typing update: ${userId} is typing: ${isTyping}`);
+
+      setClientTypingStatus(prevStatus => {
+        const existingTimeoutId = prevStatus[userId];
+
+        // Clear existing timeout if there is one
+        if (existingTimeoutId) {
+          clearTimeout(existingTimeoutId);
+        }
+
+        if (isTyping) {
+          // Set a new timeout to automatically clear the status
+          const newTimeoutId = setTimeout(() => {
+            setClientTypingStatus(prev => ({ ...prev, [userId]: null }));
+          }, 2500); // Adjust timeout duration as needed (e.g., 2.5 seconds)
+
+          // Return new state with the timeout ID
+          return { ...prevStatus, [userId]: newTimeoutId };
+        } else {
+          // If isTyping is false, just clear the status
+          return { ...prevStatus, [userId]: null };
+        }
+      });
+    };
+    
     // Set up handlers
     setMessageHandler(messageHandlerRef.current);
     setClientListHandler(clientListHandlerRef.current);
     setClientQueueHandler(clientQueueHandlerRef.current);
     setSessionHandler(sessionHandlerRef.current);
     setClientChatClosedHandler(clientChatClosedHandlerRef.current);
+    setTypingHandler(typingHandlerRef.current);
     
     // Attempt to reconnect with stored credentials
     console.log('Attempting to reconnect operator with stored credentials:', { operatorName, operatorNumber, operatorId });
@@ -296,6 +327,7 @@ function OperatorDashboard() {
       setClientQueueHandler(null);
       setSessionHandler(null);
       setClientChatClosedHandler(null);
+      setTypingHandler(null);
     };
   }, [navigate]);
   
@@ -442,6 +474,37 @@ function OperatorDashboard() {
       
       operatorStorage.saveToStorage();
     }
+  };
+  
+  // Handle input change for operator typing
+  const handleInputChange = (e) => {
+    setInputMessage(e.target.value);
+
+    if (!selectedClient || !isConnected) return;
+
+    // Find roomId
+    let roomId = selectedClient.roomId;
+    if (!roomId && operatorStorage.clients && operatorStorage.clients[selectedClient.id]) {
+      roomId = operatorStorage.clients[selectedClient.id].roomId;
+    }
+
+    if (!roomId) {
+      console.error('Cannot send typing event: room ID not available for client', selectedClient.id);
+      return;
+    }
+
+    // Send typing=true immediately
+    sendOperatorTypingEvent(roomId, true);
+
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set timeout to send typing=false
+    typingTimeoutRef.current = setTimeout(() => {
+      sendOperatorTypingEvent(roomId, false);
+    }, 2000); // Send stopped typing after 2 seconds of inactivity
   };
   
   // Render dashboard
@@ -614,6 +677,19 @@ function OperatorDashboard() {
                       შეტყობინებები არ არის
                     </div>
                   )}
+                  {/* Client Typing Indicator */}
+                  {selectedClient && clientTypingStatus[selectedClient.id] && (
+                    <div className="flex justify-start mb-4">
+                      <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-xs">
+                        <div className="flex items-center space-x-1">
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100"></div>
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-200"></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* End Client Typing Indicator */}
                 </div>
 
                 {/* Message input */}
@@ -622,7 +698,7 @@ function OperatorDashboard() {
                     <input 
                       type="text"
                       value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
+                      onChange={handleInputChange}
                       placeholder={selectedClient.roomStatus === 'closed' ? "ჩათი დასრულებულია" : "შეიყვანეთ შეტყობინება..."}
                       className="flex-1 p-2 border rounded-l-lg"
                       disabled={!isConnected || selectedClient.roomStatus === 'closed'}

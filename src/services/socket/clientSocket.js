@@ -253,11 +253,12 @@ export const createClientSocket = () => {
     });
     
     // Handle typing indicator
-    socket.on('operator-typing', (data) => {
+    socket.on('operator_typing', (data) => {
       if (messageHandler && typeof messageHandler === 'function') {
+        // Pass the full data object including roomId, userId, isTyping
         messageHandler({
           type: 'typing',
-          isTyping: data.isTyping
+          ...data // Contains isTyping, roomId, userId
         });
       }
     });
@@ -438,10 +439,23 @@ export const sendClientMessage = (text, roomId) => {
   socket.emit('send_message', messageData);
 };
 
-// Send typing indicator to the operator
-export const sendClientTypingStatus = (isTyping) => {
+// Send typing indicator event to the server
+export const sendTypingEvent = (isTyping) => {
   if (socket && socket.connected) {
-    socket.emit('client-typing', { isTyping });
+    const roomId = clientStorage.roomId || sessionStorage.getItem('roomId');
+    const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
+
+    if (!roomId || !clientId) {
+      console.error("Cannot send typing event: roomId or clientId missing.");
+      return;
+    }
+
+    socket.emit('typing', {
+      roomId,
+      userId: clientId,
+      userType: 'client',
+      isTyping
+    });
   }
 };
 

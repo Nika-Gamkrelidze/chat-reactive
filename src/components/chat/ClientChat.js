@@ -5,7 +5,7 @@ import {
   setClientMessageHandler, 
   setClientSessionHandler,
   sendClientMessage, 
-  sendClientTypingStatus,
+  sendTypingEvent,
   clientStorage,
   getClientSocket,
   sendClientEndChat,
@@ -29,7 +29,8 @@ function ClientChat() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
+  const clientTypingTimeoutRef = useRef(null);
+  const operatorTypingTimeoutRef = useRef(null);
   const socketInitializedRef = useRef(false);
   const navigate = useNavigate();
   const [roomId, setRoomId] = useState(null);
@@ -59,7 +60,25 @@ function ClientChat() {
       
       // Handle typing indicator
       if (message.type === 'typing') {
-        setOperatorTyping(message.isTyping);
+        console.log('[ClientChat] Typing event received:', message);
+        // Clear existing timeout
+        if (operatorTypingTimeoutRef.current) {
+          clearTimeout(operatorTypingTimeoutRef.current);
+        }
+
+        if (message.isTyping) {
+          console.log('[ClientChat] Setting operatorTyping to TRUE');
+          setOperatorTyping(true);
+          // Set a new timeout to hide the indicator
+          operatorTypingTimeoutRef.current = setTimeout(() => {
+            console.log('[ClientChat] Operator typing timeout expired, setting to FALSE');
+            setOperatorTyping(false);
+          }, 2500); // Operator typing indicator timeout (2.5 seconds)
+        } else {
+          console.log('[ClientChat] Setting operatorTyping to FALSE (isTyping was false)');
+          setOperatorTyping(false); // Explicitly set to false if isTyping is false
+          operatorTypingTimeoutRef.current = null;
+        }
         return;
       }
       
@@ -220,6 +239,14 @@ function ClientChat() {
     return () => {
       clearTimeout(connectionTimeout);
       
+      // Clear any pending typing timeouts
+      if (clientTypingTimeoutRef.current) {
+        clearTimeout(clientTypingTimeoutRef.current);
+      }
+      if (operatorTypingTimeoutRef.current) {
+        clearTimeout(operatorTypingTimeoutRef.current);
+      }
+      
       // Don't disconnect the socket, just remove the handlers
       const currentSocket = getClientSocket();
       if (currentSocket) {
@@ -266,16 +293,16 @@ function ClientChat() {
     if (!isConnected) return;
     
     // Send typing indicator
-    sendClientTypingStatus(true);
+    sendTypingEvent(true);
     
     // Clear previous timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
+    if (clientTypingTimeoutRef.current) {
+      clearTimeout(clientTypingTimeoutRef.current);
     }
     
     // Set timeout to clear typing indicator
-    typingTimeoutRef.current = setTimeout(() => {
-      sendClientTypingStatus(false);
+    clientTypingTimeoutRef.current = setTimeout(() => {
+      sendTypingEvent(false);
     }, 2000);
   };
   
@@ -341,6 +368,9 @@ function ClientChat() {
     // Navigate to login
     navigate('/client/login');
   };
+  
+  // Log operatorTyping state during render
+  console.log('[ClientChat] Rendering - operatorTyping:', operatorTyping);
   
   if (isLoading) {
     return (

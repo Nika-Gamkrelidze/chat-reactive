@@ -7,6 +7,7 @@ let sessionHandler = null;
 let clientListHandler = null;
 let clientQueueHandler = null;
 let clientChatClosedHandler = null;
+let typingHandler = null;
 
 // Debug flag
 const DEBUG_SOCKET = true;
@@ -410,13 +411,11 @@ export const createOperatorSocket = () => {
     });
     
     // Handle client typing indicator
-    socket.on('client-typing', (data) => {
-      if (messageHandler && typeof messageHandler === 'function') {
-        messageHandler({
-          type: 'typing',
-          clientId: data.clientId,
-          isTyping: data.isTyping
-        });
+    socket.on('client_typing', (data) => {
+      console.log('Operator received client_typing event:', data);
+      if (typingHandler && typeof typingHandler === 'function') {
+        // Pass the full data: { roomId, userId, isTyping, timestamp }
+        typingHandler(data);
       }
     });
 
@@ -690,6 +689,17 @@ export const setClientChatClosedHandler = (handler) => {
   }
 };
 
+export const setTypingHandler = (handler) => {
+  if (handler && typeof handler === 'function') {
+    console.log('Setting operator typing handler');
+    typingHandler = handler;
+  } else if (handler === null) {
+    typingHandler = null;
+  } else {
+    console.error('Invalid typing handler provided:', handler);
+  }
+};
+
 export const disconnectOperatorSocket = () => {
   if (socket) socket.disconnect();
 };
@@ -756,10 +766,25 @@ export const acceptClient = (clientId) => {
   return false;
 };
 
-// Send typing indicator to client
-export const sendTypingStatus = (clientId, isTyping) => {
+// Send typing indicator event to the server
+export const sendOperatorTypingEvent = (roomId, isTyping) => {
   if (socket && socket.connected) {
-    // socket.emit('operator-typing', { clientId, isTyping });
+    const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+    if (!operatorId) {
+        console.error("Cannot send typing event: operatorId missing.");
+        return;
+    }
+    if (!roomId) {
+        console.error("Cannot send typing event: roomId missing.");
+        return;
+    }
+
+    socket.emit('typing', {
+        roomId,
+        userId: operatorId,
+        userType: 'operator',
+        isTyping
+    });
   }
 };
 
