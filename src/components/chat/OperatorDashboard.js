@@ -14,7 +14,8 @@ import {
   disconnectOperatorSocket,
   operatorStorage,
   getOperatorSocket,
-  acceptClient
+  acceptClient,
+  setClientChatClosedHandler
 } from '../../services/socket/operatorSocket';
 
 function OperatorDashboard() {
@@ -38,6 +39,7 @@ function OperatorDashboard() {
   const clientListHandlerRef = useRef(null);
   const clientQueueHandlerRef = useRef(null);
   const sessionHandlerRef = useRef(null);
+  const clientChatClosedHandlerRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
   // Function to scroll to bottom of messages
@@ -184,7 +186,7 @@ function OperatorDashboard() {
       // Handle operator data
       if (sessionData.operator) {
         // Update operator status if provided
-        if (sessionData.operator.status) {
+        if (sessionData.operator?.status) {
           setOperatorStatus(sessionData.operator.status);
         }
       }
@@ -198,7 +200,6 @@ function OperatorDashboard() {
           .filter(room => room.client) // Ensure room has a client object
           .map(room => ({
             ...room.client, // Spread client details
-            status: room.status || 'active', // Use room status, default to active
             roomId: room.roomId, // Ensure roomId is included
             roomStatus: room.status || 'active', // Add roomStatus for consistency
             unreadCount: 0 // Initialize unread count
@@ -224,7 +225,7 @@ function OperatorDashboard() {
         // Map activeClients, ensuring a default status if missing
         clientsToSet = sessionData.activeClients.map(client => ({
            ...client,
-           roomStatus: client.roomStatus || client.status || 'active', // Ensure roomStatus exists
+           roomStatus: client.roomStatus || client.status || 'active', 
            unreadCount: client.unreadCount || 0 // Preserve existing or default to 0
         }));
       }
@@ -252,11 +253,28 @@ function OperatorDashboard() {
       }
     };
     
+    // Define handler for client ending chat
+    clientChatClosedHandlerRef.current = (closedClientId) => {
+      console.log('Handling client_ended_chat for client ID:', closedClientId);
+      // Check if the closed client is the currently selected one
+      if (selectedClient && selectedClient.id === closedClientId) {
+        // Update the selected client state to reflect the closure
+        setSelectedClient(prevSelectedClient => {
+          if (prevSelectedClient && prevSelectedClient.id === closedClientId) {
+            return { ...prevSelectedClient, roomStatus: 'closed' };
+          }
+          return prevSelectedClient;
+        });
+        // No need to remove from active clients here as clientListHandler already does
+      }
+    };
+    
     // Set up handlers
     setMessageHandler(messageHandlerRef.current);
     setClientListHandler(clientListHandlerRef.current);
     setClientQueueHandler(clientQueueHandlerRef.current);
     setSessionHandler(sessionHandlerRef.current);
+    setClientChatClosedHandler(clientChatClosedHandlerRef.current);
     
     // Attempt to reconnect with stored credentials
     console.log('Attempting to reconnect operator with stored credentials:', { operatorName, operatorNumber, operatorId });
@@ -277,6 +295,7 @@ function OperatorDashboard() {
       setClientListHandler(null);
       setClientQueueHandler(null);
       setSessionHandler(null);
+      setClientChatClosedHandler(null);
     };
   }, [navigate]);
   
@@ -495,9 +514,12 @@ function OperatorDashboard() {
           <div className="w-64 bg-white border-r flex-shrink-0">
             <div className="h-full overflow-y-auto p-4">
               <h2 className="text-lg font-medium text-gray-700 mb-2">მომხმარებლები</h2>
-              {activeClients.length > 0 ? (
+              {/* Filter out clients with 'closed' roomStatus before mapping */}
+              {activeClients.filter(client => client.roomStatus !== 'closed').length > 0 ? (
                 <ul className="space-y-2">
-                  {activeClients.map(client => (
+                  {activeClients
+                    .filter(client => client.roomStatus !== 'closed') // Only show non-closed chats
+                    .map(client => (
                     <li 
                       key={client.id}
                       onClick={() => handleClientSelect(client)}
@@ -526,11 +548,11 @@ function OperatorDashboard() {
                             {client.roomStatus === 'active' ? 'აქტიური' : 'დასრულებული'}
                           </span>
                           <span className={`w-2 h-2 rounded-full ${
-                            client.roomStatus === 'active' 
+                            client.roomStatus === 'active' // Color based on roomStatus
                               ? 'bg-green-500' 
                               : client.roomStatus === 'closed'
                                 ? 'bg-red-500'
-                                : 'bg-yellow-500' // Keep yellow for potential other statuses
+                                : 'bg-yellow-500' // Keep yellow for potential other statuses, e.g., paused by operator?
                           }`}></span>
                         </div>
                       </div>
