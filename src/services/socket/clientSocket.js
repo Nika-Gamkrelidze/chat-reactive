@@ -448,7 +448,7 @@ export const clearClientData = () => {
 // Send end chat notification to server
 export const sendClientEndChat = (clientData) => {
   if (socket && socket.connected) {
-    socket.emit('end-chat', clientData);
+    socket.emit('end_chat', clientData);
     // Note: We don't disconnect here anymore as we need to wait for feedback submission
   }
 };
