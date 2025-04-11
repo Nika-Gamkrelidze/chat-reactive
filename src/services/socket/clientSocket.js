@@ -281,6 +281,17 @@ export const createClientSocket = () => {
       }
     });
 
+    socket.on('feedback_submitted', (data) => {
+      console.log('Received feedback_submitted event:', data);
+      // Use the session handler to notify the component
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        // Notify component *before* cleanup
+        sessionHandler({ feedbackProcessed: true, success: data.success });
+
+        // Cleanup socket regardless of success
+        cleanupClientSocket();
+      }
+    });
   }
   
   return socket;
@@ -456,10 +467,29 @@ export const sendClientEndChat = (clientData) => {
 // Send feedback to server
 export const sendClientFeedback = (feedbackData) => {
   if (socket && socket.connected) {
-    // feedbackData should contain: { roomId, score, comment }
-    socket.emit('client-feedback', feedbackData);
-    // Cleanup after sending feedback
-    cleanupClientSocket();
+    const currentRoomId = clientStorage.roomId || sessionStorage.getItem('roomId');
+    const currentClientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
+
+    if (!currentRoomId) {
+      console.error("Cannot send feedback: Room ID not found.");
+      return;
+    }
+    if (!currentClientId) {
+        console.error("Cannot send feedback: Client ID not found.");
+        return;
+    }
+
+    // feedbackData should contain { score, comment }
+    const payload = {
+        // Rename score to rating
+        rating: feedbackData.score, 
+        comment: feedbackData.comment,
+        roomId: currentRoomId,
+        // Add clientId
+        clientId: currentClientId
+    };
+
+    socket.emit('client_feedback', payload);
   }
 };
 

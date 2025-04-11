@@ -90,6 +90,23 @@ function ClientChat() {
     // Define session handler function
     const handleSessionUpdate = (sessionData) => {
       console.log('Session update received in ClientChat:', sessionData);
+
+      // Handle feedback processed signal
+      if (sessionData.feedbackProcessed) {
+        // Cleanup and redirect regardless of success, as the feedback process is complete.
+        console.log(`Feedback process finished (success: ${sessionData.success}), cleaning up and redirecting.`);
+        // Reset component state
+        setMessages([]);
+        setHasOperator(false);
+        setOperatorInfo(null);
+        setRoomId(null);
+        setIsConnected(false);
+        // Navigate to login
+        navigate('/client/login');
+
+        return; // Stop further processing for this event
+      }
+
       setIsLoading(false);
       
       // Add this new condition
@@ -289,27 +306,15 @@ function ClientChat() {
   };
   
   const handleSubmitFeedback = () => {
+    // Only pass score and comment
     const feedbackData = {
-      roomId,
       score: feedbackScore,
       comment: feedbackComment
     };
     
     sendClientFeedback(feedbackData);
     setShowFeedbackModal(false);
-
-    // Use the new cleanup function
-    cleanupClientSocket();
-    
-    // Reset component state
-    setMessages([]);
-    setHasOperator(false);
-    setOperatorInfo(null);
-    setRoomId(null);
-    setIsConnected(false);
-    
-    // Navigate to login
-    navigate('/client/login');
+    // Cleanup and navigation are handled in handleSessionUpdate after feedback_submitted event
   };
 
   const handleShowFeedbackModal = () => {  
