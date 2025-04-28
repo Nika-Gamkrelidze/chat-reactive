@@ -19,6 +19,7 @@ import {
   sendOperatorTypingEvent,
   setTypingHandler
 } from '../../services/socket/operatorSocket';
+import ClientInfoSidebar from './ClientInfoSidebar';
 
 function OperatorDashboard() {
   const navigate = useNavigate();
@@ -246,6 +247,9 @@ function OperatorDashboard() {
         });
       }
 
+      // Log the final clientsToSet before updating state
+      console.log('Clients derived from session data:', clientsToSet);
+
       // Update messages state
       setMessages(messagesToSet);
       
@@ -333,7 +337,7 @@ function OperatorDashboard() {
   
   // Handle client selection
   const handleClientSelect = (client) => {
-    console.log('Selected client:', client);
+    console.log('Selected client object:', client);
     setSelectedClient(client);
     
     // Mark client as read and RESET unread count when selected
@@ -555,6 +559,17 @@ function OperatorDashboard() {
             }
           </button>
           <button
+            onClick={handleEndChat}
+            className={`px-4 py-2 rounded text-white ${
+              !selectedClient || selectedClient.roomStatus === 'closed' || !isConnected
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-gray-500 hover:bg-gray-600'
+            }`}
+            disabled={!selectedClient || selectedClient.roomStatus === 'closed' || !isConnected}
+          >
+            ჩათის დასრულება
+          </button>
+          <button
             onClick={handleLogout}
             className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
           >
@@ -573,7 +588,7 @@ function OperatorDashboard() {
         </div>
       ) : (
         <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar */}
+          {/* Sidebar - Client List */}
           <div className="w-64 bg-white border-r flex-shrink-0">
             <div className="h-full overflow-y-auto p-4">
               <h2 className="text-lg font-medium text-gray-700 mb-2">მომხმარებლები</h2>
@@ -632,21 +647,6 @@ function OperatorDashboard() {
           <div className="flex-1 flex flex-col overflow-hidden">
             {selectedClient ? (
               <>
-                {/* Chat header */}
-                <div className="bg-white border-b p-4 flex-shrink-0 flex justify-between items-center">
-                  <div>
-                    <h2 className="font-medium">{selectedClient.name}</h2>
-                    <p className="text-sm text-gray-500">{selectedClient.number}</p>
-                  </div>
-                  <button
-                    onClick={handleEndChat}
-                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                    disabled={!isConnected}
-                  >
-                    ჩათის დასრულება
-                  </button>
-                </div>
-                
                 {/* Messages */}
                 <div 
                   ref={messagesContainerRef}
@@ -723,6 +723,10 @@ function OperatorDashboard() {
               </div>
             )}
           </div>
+          {/* Client Info Sidebar - Right Side */}
+          {selectedClient && (
+            <ClientInfoSidebar client={selectedClient} />
+          )}
         </div>
       )}
     </div>
