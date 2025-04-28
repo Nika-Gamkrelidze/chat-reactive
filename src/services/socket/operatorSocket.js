@@ -177,6 +177,7 @@ export const createOperatorSocket = () => {
     // Handle session establishment
     socket.on('session', (data) => {
       console.log('Operator session established with data:', data);
+      console.log('DEBUG: Checking metadata in session data:', data?.activeRooms?.map(r => r.client?.metadata), data?.activeClients?.map(c => c.metadata));
       
       const { operator, activeRooms, activeClients: sessionActiveClients } = data;
 
@@ -204,6 +205,7 @@ export const createOperatorSocket = () => {
     // Handle session reconnection
     socket.on('session-reconnect', (data) => {
       console.log('Operator session reconnected with data:', data);
+      console.log('DEBUG: Checking metadata in session-reconnect data:', data?.activeRooms?.map(r => r.client?.metadata), data?.activeClients?.map(c => c.metadata));
 
       const { operator, activeRooms, activeClients: sessionActiveClients } = data;
       
@@ -227,6 +229,7 @@ export const createOperatorSocket = () => {
     // Handle room assignment
     socket.on('room_assigned', (data) => {
       console.log('Room assigned to operator:', data);
+      console.log('DEBUG: Checking metadata in room_assigned data:', data?.client?.metadata);
       
       if (data && data.client && data.roomId && data.client.id) {
         // Initialize clients object if needed
@@ -325,6 +328,7 @@ export const createOperatorSocket = () => {
     socket.on('active_clients', (clients) => {
       if (DEBUG_SOCKET) {
         console.log('Operator received active clients update:', clients);
+        console.log('DEBUG: Checking metadata in active_clients data:', clients?.map(c => c.metadata));
       }
       
       // Initialize nested clients storage if needed

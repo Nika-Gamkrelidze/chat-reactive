@@ -6,6 +6,7 @@ import { initClientSocket, setClientSessionHandler, isSocketConnected } from '..
 function ClientLogin() {
   const [name, setName] = useState('');
   const [number, setNumber] = useState('');
+  const [police, setPolice] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionReceived, setSessionReceived] = useState(false);
@@ -13,7 +14,7 @@ function ClientLogin() {
   const location = useLocation();
   const { login } = useAuth();
   
-  const attemptLogin = useCallback(async (loginName, loginNumber) => {
+  const attemptLogin = useCallback(async (loginName, loginNumber, loginPolice) => {
     setError('');
     setIsLoading(true);
     setSessionReceived(false);
@@ -26,11 +27,13 @@ function ClientLogin() {
           sessionStorage.setItem('clientId', sessionData.client.id);
           sessionStorage.setItem('clientName', loginName);
           sessionStorage.setItem('clientNumber', loginNumber);
+          sessionStorage.setItem('clientPolice', loginPolice);
           
           login({
             id: sessionData.client.id,
             name: loginName,
             number: loginNumber,
+            police: loginPolice,
             role: 'client'
           });
           
@@ -43,12 +46,13 @@ function ClientLogin() {
           sessionStorage.removeItem('clientId');
           sessionStorage.removeItem('clientName');
           sessionStorage.removeItem('clientNumber');
+          sessionStorage.removeItem('clientPolice');
           sessionStorage.removeItem('user');
         }
       });
       
-      console.log(`Attempting to login client with name: ${loginName}, number: ${loginNumber}`);
-      initClientSocket(loginName, loginNumber);
+      console.log(`Attempting to login client with name: ${loginName}, number: ${loginNumber}, police: ${loginPolice}`);
+      initClientSocket(loginName, loginNumber, loginPolice);
       
     } catch (err) {
       console.error('Login error during client attemptLogin:', err);
@@ -60,9 +64,10 @@ function ClientLogin() {
   useEffect(() => {
     const storedClientName = sessionStorage.getItem('clientName');
     const storedClientNumber = sessionStorage.getItem('clientNumber');
+    const storedClientPolice = sessionStorage.getItem('clientPolice');
     const storedUser = sessionStorage.getItem('user');
     
-    if (storedClientName && storedClientNumber && storedUser) {
+    if (storedClientName && storedClientNumber && storedClientPolice && storedUser) {
       try {
         const user = JSON.parse(storedUser);
         if (user && user.role === 'client') {
@@ -74,6 +79,7 @@ function ClientLogin() {
         console.error('Error parsing stored user for client:', parseError);
         sessionStorage.removeItem('clientName');
         sessionStorage.removeItem('clientNumber');
+        sessionStorage.removeItem('clientPolice');
         sessionStorage.removeItem('user');
         sessionStorage.removeItem('clientId');
       }
@@ -82,12 +88,14 @@ function ClientLogin() {
     const queryParams = new URLSearchParams(location.search);
     const nameFromUrl = queryParams.get('name');
     const numberFromUrl = queryParams.get('number');
+    const policeFromUrl = queryParams.get('police');
 
-    if (nameFromUrl && numberFromUrl && !isLoading) {
-      console.log('Found client name and number in URL, attempting auto-login.');
+    if (nameFromUrl && numberFromUrl && policeFromUrl && !isLoading) {
+      console.log('Found client name, number, and police in URL, attempting auto-login.');
       setName(nameFromUrl);
       setNumber(numberFromUrl);
-      attemptLogin(nameFromUrl, numberFromUrl);
+      setPolice(policeFromUrl);
+      attemptLogin(nameFromUrl, numberFromUrl, policeFromUrl);
     }
   }, [navigate, location.search, isLoading, attemptLogin]);
   
@@ -101,7 +109,7 @@ function ClientLogin() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isLoading) {
-      attemptLogin(name, number);
+      attemptLogin(name, number, police);
     }
   };
 
@@ -134,9 +142,25 @@ function ClientLogin() {
             />
           </div>
           
+          <div className="mb-4">
+            <label htmlFor="police" className="block text-sm font-medium text-gray-700 mb-1">
+              პოლისის ნომერი
+            </label>
+            <input
+              type="text"
+              id="police"
+              value={police}
+              onChange={(e) => setPolice(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none"
+              placeholder="შეიყვანეთ პოლისის ნომერი"
+              required
+              disabled={isLoading}
+            />
+          </div>
+          
           <div className="mb-6">
             <label htmlFor="number" className="block text-sm font-medium text-gray-700 mb-1">
-              ნომერი
+              ტელეფონის ნომერი
             </label>
             <input
               type="text"
