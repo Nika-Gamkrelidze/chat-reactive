@@ -327,7 +327,10 @@ export const initClientSocket = (name, number, clientId = null) => {
     name: name,
     number: number,
     userId: clientId || sessionStorage.getItem('clientId'),
-    type: "client"
+    type: "client",
+    metadata: {
+      test: 'testValue' 
+    }
   };
   
   console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and userId: ${clientId || 'null'}`);
@@ -362,7 +365,10 @@ export const reconnectClientSocket = () => {
       name: name,
       number: number,
       userId: clientId, // Include clientId if available
-      type: "client"
+      type: "client",
+      metadata: {
+        test: 'testValue' 
+      }
     };
     
     console.log(`Reconnecting to socket server as client with name: ${name}, number: ${number}, and userId: ${clientId || 'null'}`);
