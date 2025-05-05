@@ -1,52 +1,53 @@
 {
-  "name": "chat-reactive",
-  "version": "0.1.0",
-  "private": true,
-  "proxy": "https://chat.communiq.ge",
-  "dependencies": {
-    "@socket.io/admin-ui": "^0.5.1",
-    "@tailwindcss/cli": "^4.0.14",
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.2.0",
-    "@testing-library/user-event": "^13.5.0",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "http-proxy-middleware": "^2.0.6",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-icons": "^5.5.0",
-    "react-router-dom": "^7.3.0",
-    "react-scripts": "5.0.1",
-    "socket.io-client": "^4.8.1",
-    "web-vitals": "^2.1.4"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "proxy": "node server.js"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  },
-  "devDependencies": {
-    "tailwindcss": "^3.4.17"
-  }
+    "name": "chat-reactive",
+    "version": "0.1.0",
+    "private": true,
+    "homepage": "/chat-frontend/",
+    "proxy": "https://testing.communiq.ge",
+    "dependencies": {
+        "@socket.io/admin-ui": "^0.5.1",
+        "@tailwindcss/cli": "^4.0.14",
+        "@testing-library/dom": "^10.4.0",
+        "@testing-library/jest-dom": "^6.6.3",
+        "@testing-library/react": "^16.2.0",
+        "@testing-library/user-event": "^13.5.0",
+        "cors": "^2.8.5",
+        "express": "^4.18.2",
+        "http-proxy-middleware": "^2.0.6",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "react-icons": "^5.5.0",
+        "react-router-dom": "^7.3.0",
+        "react-scripts": "5.0.1",
+        "socket.io-client": "^4.8.1",
+        "web-vitals": "^2.1.4"
+    },
+    "scripts": {
+        "start": "react-scripts start",
+        "build": "react-scripts build",
+        "test": "react-scripts test",
+        "eject": "react-scripts eject",
+        "proxy": "node server.js"
+    },
+    "eslintConfig": {
+        "extends": [
+            "react-app",
+            "react-app/jest"
+        ]
+    },
+    "browserslist": {
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    },
+    "devDependencies": {
+        "tailwindcss": "^3.4.17"
+    }
 }
