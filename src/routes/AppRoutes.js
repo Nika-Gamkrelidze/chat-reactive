@@ -10,8 +10,8 @@ import OperatorDashboard from '../components/chat/OperatorDashboard';
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/home" element={<Home />} />
-      <Route path="/client/login" element={<ClientLogin />} />
+      {/* <Route path="/home" element={<Home />} /> */}
+      {/* <Route path="/client/login" element={<ClientLogin />} />
       <Route 
         path="/client/chat" 
         element={
@@ -19,7 +19,7 @@ function AppRoutes() {
             <ClientChat />
           </PrivateRoute>
         } 
-      />
+      /> */}
       <Route path="/operator/login" element={<OperatorLogin />} />
       <Route 
         path="/operator/dashboard" 
@@ -29,7 +29,7 @@ function AppRoutes() {
           </PrivateRoute>
         } 
       />
-      <Route path="/" element={<Navigate to="/home" replace />} />
+      <Route path="/" element={<Navigate to="/operator/login" replace />} />
     </Routes>
   );
 }

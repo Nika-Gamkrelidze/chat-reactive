@@ -2,8 +2,8 @@
     "name": "chat-reactive",
     "version": "0.1.0",
     "private": true,
-    "homepage": "/chat-frontend/",
-    "proxy": "https://testing.communiq.ge",
+    "homepage": "/chatoper/",
+    "proxy": "https://gpi.communiq.ge",
     "dependencies": {
         "@socket.io/admin-ui": "^0.5.1",
         "@tailwindcss/cli": "^4.0.14",

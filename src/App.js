@@ -5,7 +5,7 @@ import AppRoutes from './routes/AppRoutes';
 
 function App() {
   return (
-    <Router basename="/myapp">
+    <Router basename="/chatoper">
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
