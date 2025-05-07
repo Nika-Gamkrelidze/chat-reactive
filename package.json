@@ -3,7 +3,7 @@
     "version": "0.1.0",
     "private": true,
     "homepage": "/chat/",
-    "proxy": "https://gpi.communiq.ge",
+    "proxy": "https://chat-reactive.vercel.app/",
     "dependencies": {
         "@socket.io/admin-ui": "^0.5.1",
         "@tailwindcss/cli": "^4.0.14",
