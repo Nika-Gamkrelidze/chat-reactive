@@ -1,7 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import PrivateRoute from './PrivateRoute';
-import Home from '../components/common/Home';
 import ClientLogin from '../components/auth/ClientLogin';
 import OperatorLogin from '../components/auth/OperatorLogin';
 import ClientChat from '../components/chat/ClientChat';
