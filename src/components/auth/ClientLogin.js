@@ -114,8 +114,8 @@ function ClientLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-soft p-8">
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full bg-white rounded-2xl shadow-soft p-8 md:max-w-md">
         <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">მომხმარებლის შესვლა</h1>
         
         {error && (
