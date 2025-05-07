@@ -11,7 +11,7 @@ function OperatorLogin() {
   const location = useLocation();
   const { login } = useAuth();
   
-  const attemptLogin = useCallback(async (loginName, loginNumber) => {
+  const attemptLogin = useCallback(async (loginName, loginNumber, operatorId = null) => {
     setError('');
     setIsLoading(true);
     setSessionReceived(false);
@@ -49,7 +49,7 @@ function OperatorLogin() {
       });
 
       console.log(`Attempting to login with name: ${loginName}, number: ${loginNumber}`);
-      initOperatorSocket(loginName, loginNumber);
+      initOperatorSocket(loginName, loginNumber, operatorId);
 
     } catch (error) {
       console.error('Login error during attemptLogin:', error);
@@ -82,10 +82,11 @@ function OperatorLogin() {
     const queryParams = new URLSearchParams(location.search);
     const nameFromUrl = queryParams.get('name');
     const numberFromUrl = queryParams.get('number');
+    const operatorIdFromUrl = queryParams.get('operatorId');
 
     if (nameFromUrl && numberFromUrl && !isLoading) {
       console.log('Found name and number in URL, attempting auto-login.');
-      attemptLogin(nameFromUrl, numberFromUrl);
+      attemptLogin(nameFromUrl, numberFromUrl, operatorIdFromUrl);
     }
   }, [navigate, location.search, attemptLogin, isLoading]);
 
