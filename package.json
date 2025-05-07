@@ -2,7 +2,7 @@
     "name": "chat-reactive",
     "version": "0.1.0",
     "private": true,
-    "homepage": "",
+    "homepage": "https://chat-reactive.vercel.app",
     "proxy": "",
     "dependencies": {
         "@socket.io/admin-ui": "^0.5.1",
