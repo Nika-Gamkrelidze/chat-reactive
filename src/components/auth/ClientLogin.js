@@ -114,9 +114,8 @@ function ClientLogin() {
   };
 
   return (
-    <div className="p-4 md:min-h-screen md:flex md:items-center md:justify-center">
-      <div className="w-full min-h-screen bg-white shadow-soft p-8 md:min-h-0 md:rounded-2xl md:max-w-md">
-        <h1 className="hidden md:block text-2xl font-bold text-center text-gray-800 mb-6">მომხმარებლის შესვლა</h1>
+    <div className="">
+      <div className="w-full min-h-screen bg-white shadow-soft p-8">
         
         {error && (
           <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
