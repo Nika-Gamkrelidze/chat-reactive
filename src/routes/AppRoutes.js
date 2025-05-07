@@ -11,7 +11,7 @@ function AppRoutes() {
   return (
     <Routes>
       {/* <Route path="/home" element={<Home />} /> */}
-      {/* <Route path="/client/login" element={<ClientLogin />} />
+      <Route path="/client/login" element={<ClientLogin />} />
       <Route 
         path="/client/chat" 
         element={
@@ -19,7 +19,7 @@ function AppRoutes() {
             <ClientChat />
           </PrivateRoute>
         } 
-      /> */}
+      />
       <Route path="/operator/login" element={<OperatorLogin />} />
       <Route 
         path="/operator/dashboard" 
