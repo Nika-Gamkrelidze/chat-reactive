@@ -115,7 +115,7 @@ function ClientLogin() {
 
   return (
     <div className="">
-      <div className="w-full min-h-screen bg-white shadow-soft p-8">
+      <div className="w-full bg-white shadow-soft p-8">
         
         {error && (
           <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
@@ -134,7 +134,7 @@ function ClientLogin() {
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none"
+              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none placeholder:text-sm"
               placeholder="შეიყვანეთ თქვენი სახელი"
               required
               disabled={isLoading}
@@ -150,7 +150,7 @@ function ClientLogin() {
               id="police"
               value={police}
               onChange={(e) => setPolice(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none"
+              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none placeholder:text-sm"
               placeholder="შეიყვანეთ პოლისის ნომერი"
               required
               disabled={isLoading}
@@ -166,7 +166,7 @@ function ClientLogin() {
               id="number"
               value={number}
               onChange={(e) => setNumber(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none"
+              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none placeholder:text-sm"
               placeholder="შეიყვანეთ თქვენი ნომერი"
               required
               disabled={isLoading}
