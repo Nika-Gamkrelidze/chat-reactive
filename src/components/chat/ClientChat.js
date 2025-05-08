@@ -385,59 +385,59 @@ function ClientChat() {
   }
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-soft overflow-hidden flex flex-col h-[80vh]">
+    <div className="h-full w-full flex flex-col">
+      <div className="w-full max-w-md mx-auto bg-white rounded-lg shadow-xl overflow-hidden flex flex-col h-full">
         {/* Chat Header */}
-        <div className="bg-gradient-to-r from-primary-500 to-primary-600 text-white p-4 flex justify-between items-center">
+        <div className="bg-gradient-to-r from-primary-500 to-primary-600 text-white p-3 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-semibold">
+            <h2 className="text-lg font-semibold">
               {hasOperator 
-                ? `ჩათი ${operatorInfo?.name || 'ოპერატორთან'}`
-                : 'ოპერატორის ლოდინი...'}
+                ? `Chat with ${operatorInfo?.name || 'Operator'}`
+                : 'Waiting for Operator...'}
             </h2>
-            <p className="text-sm text-primary-100">
-              {!isConnected && <span className="text-red-200">⚠️ ხელახლა დაკავშირება...</span>}
+            <p className="text-xs text-primary-100">
+              {!isConnected && <span className="text-red-200">⚠️ Reconnecting...</span>}
               {isConnected && (hasOperator 
-                ? 'თქვენ დაკავშირებული ხართ ოპერატორთან'
-                : 'თქვენ ხართ რიგში')}
+                ? 'You are connected'
+                : 'You are in queue')}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             {!hasOperator && (
               <button
                 onClick={handleCallbackRequest}
-                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
+                title="Request Callback"
+                className="p-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md transition-colors flex items-center justify-center shadow-sm hover:shadow-md"
               >
-                <FiPhoneOff className="text-xl" />
-                <span>ზარის მოთხოვნა</span>
+                <FiPhoneOff className="text-lg" />
               </button>
             )}
             <button
               onClick={handleEndChat}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
+              title="End Chat"
+              className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors flex items-center justify-center shadow-sm hover:shadow-md"
             >
-              <IoMdExit className="text-xl" />
-              <span>ჩათის დასრულება</span>
+              <IoMdExit className="text-lg" />
             </button>
           </div>
         </div>
         
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
           {messages.map((msg, index) => (
             <div
               key={`${msg.messageId || index}`}
-              className={`flex ${msg.sender === 'client' ? 'justify-end' : 'justify-start'} mb-3`}
+              className={`flex ${msg.sender === 'client' ? 'justify-end' : 'justify-start'} mb-2.5`}
             >
               <div
-                className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+                className={`max-w-[75%] rounded-xl px-3 py-1.5 ${
                   msg.sender === 'client'
                     ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white'
                     : 'bg-white border border-gray-200 text-gray-800'
                 }`}
               >
-                <p className="text-sm break-words">{msg.text}</p>
-                <p className={`text-xs mt-1 ${
+                <p className="text-xs break-words">{msg.text}</p>
+                <p className={`text-[10px] mt-0.5 ${
                   msg.sender === 'client' ? 'text-primary-100' : 'text-gray-400'
                 }`}>
                   {formatMessageTime(msg.timestamp)}
@@ -447,12 +447,12 @@ function ClientChat() {
             </div>
           ))}
           {operatorTyping && (
-            <div className="flex justify-start mb-3">
-              <div className="bg-white border border-gray-200 rounded-2xl px-4 py-2">
+            <div className="flex justify-start mb-2.5">
+              <div className="bg-white border border-gray-200 rounded-xl px-3 py-1.5">
                 <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></div>
+                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce delay-100"></div>
+                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce delay-200"></div>
                 </div>
               </div>
             </div>
@@ -461,43 +461,46 @@ function ClientChat() {
         </div>
 
         {/* Input */}
-        <div className="bg-white border-t p-4">
-          <form onSubmit={handleSendMessage} className="flex space-x-4">
+        <div className="bg-white border-t p-3">
+          <form onSubmit={handleSendMessage} className="flex space-x-2">
             <input
               type="text"
               value={inputMessage}
               onChange={handleInputChange}
-              className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all outline-none"
-              placeholder="შეიყვანეთ შეტყობინება..."
+              className="flex-1 px-3 py-1.5 border border-gray-200 rounded-md focus:ring-1 focus:ring-primary-400 focus:border-transparent transition-all outline-none text-sm"
+              placeholder="Type a message..."
               disabled={!isConnected}
             />
             <button
               type="submit"
-              className={`px-6 py-2 font-medium rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm ${
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm ${
                 isConnected 
                   ? 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
               disabled={!isConnected}
             >
-              გაგზავნა
+              Send
             </button>
           </form>
+        </div>
+        <div className="text-center text-xs text-gray-500 py-2 border-t border-gray-200">
+          © 2024 Crafted with <span role="img" aria-label="heart">♥</span> by CommuniQ
         </div>
 
         {/* Feedback Modal */}
         {showFeedbackModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">შეაფასეთ მომსახურება</h3>
+            <div className="bg-white rounded-xl p-5 max-w-sm w-full">
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">Rate your experience</h3>
               
               {/* Star Rating */}
-              <div className="flex justify-center space-x-2 mb-4">
+              <div className="flex justify-center space-x-1 mb-3">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
                     onClick={() => setFeedbackScore(star)}
-                    className={`text-2xl transition-colors ${
+                    className={`text-xl transition-colors ${
                       star <= feedbackScore ? 'text-yellow-400' : 'text-gray-300'
                     }`}
                   >
@@ -510,28 +513,28 @@ function ClientChat() {
               <textarea
                 value={feedbackComment}
                 onChange={(e) => setFeedbackComment(e.target.value)}
-                placeholder="დატოვეთ კომენტარი (არასავალდებულო)"
-                className="w-full p-3 border border-gray-200 rounded-lg mb-4 h-32 resize-none focus:ring-2 focus:ring-primary-400 focus:border-transparent"
+                placeholder="Leave a comment (optional)"
+                className="w-full p-2.5 border border-gray-200 rounded-md mb-3 h-24 resize-none focus:ring-1 focus:ring-primary-400 focus:border-transparent text-sm"
               />
               
               {/* Submit Button */}
-              <div className="flex justify-end space-x-3">
+              <div className="flex justify-end space-x-2">
                 <button
                   onClick={() => setShowFeedbackModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
                 >
-                  გაუქმება
+                  Cancel
                 </button>
                 <button
                   onClick={handleSubmitFeedback}
                   disabled={feedbackScore === 0}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                     feedbackScore > 0
                       ? 'bg-primary-500 hover:bg-primary-600 text-white'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  გაგზავნა
+                  Submit
                 </button>
               </div>
             </div>

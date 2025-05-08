@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body,
+#root, /* Assuming your React app mounts to an element with id="root" */
+#__next /* Adding common Next.js root id as well */ {
+  height: 100%;
+}
+
 /* Any global styles you want to add */
 body {
   @apply antialiased;
