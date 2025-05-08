@@ -19,6 +19,7 @@ import { IoMdExit } from 'react-icons/io';
 import { BiExit } from 'react-icons/bi';
 import { RiCloseLine } from 'react-icons/ri';
 import { FiPhoneOff } from 'react-icons/fi';
+import { IoSend } from 'react-icons/io5';
 
 function ClientChat() {
   const [messages, setMessages] = useState([]);
@@ -34,7 +35,6 @@ function ClientChat() {
   const socketInitializedRef = useRef(false);
   const navigate = useNavigate();
   const [roomId, setRoomId] = useState(null);
-  const [clientInfo, setClientInfo] = useState(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackScore, setFeedbackScore] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState('');
@@ -43,6 +43,7 @@ function ClientChat() {
   const clientName = sessionStorage.getItem('clientName');
   const clientNumber = sessionStorage.getItem('clientNumber');
   const clientId = sessionStorage.getItem('clientId');
+  const clientPolice = sessionStorage.getItem('clientPolice');
   
   useEffect(() => {
     // Redirect to login if no client info
@@ -82,27 +83,59 @@ function ClientChat() {
         return;
       }
       
+      const currentClientId = sessionStorage.getItem('clientId');
+
       setMessages(prevMessages => {
-        const messagesToAdd = Array.isArray(message) ? message : [message];
-        
-        // Create a map of existing messages using messageId as key
-        const existingMessages = new Map(
-          prevMessages.map(msg => [msg.messageId, msg])
-        );
-        
-        // Only add messages that come from the server (they will have proper messageId format)
-        messagesToAdd.forEach(msg => {
-          // Only add messages with proper server-generated messageId (not temp ids)
-          if (msg.messageId && !msg.messageId.startsWith('temp_')) {
-            existingMessages.set(msg.messageId, {
-              ...msg,
-              sender: msg.sentByOperator ? 'operator' : 'client'
-            });
+        const messagesToProcess = Array.isArray(message) ? message : [message];
+        let updatedMessages = [...prevMessages];
+
+        messagesToProcess.forEach(newMessage => {
+          // Ignore temporary messages if they somehow get echoed back with temp ID
+          if (!newMessage.messageId || newMessage.messageId.startsWith('temp_')) {
+            return; 
+          }
+
+          let isConfirmationOfOptimistic = false;
+          // Check if this is a server confirmation of an optimistically added message
+          // It should have senderId matching current client, and not be marked as from operator
+          if (newMessage.senderId === currentClientId && !newMessage.sentByOperator) {
+            const optimisticMessageIndex = updatedMessages.findIndex(
+              m => m.isPending && 
+                   m.senderId === currentClientId &&
+                   m.text === newMessage.text // Match by text; more robust would be a correlation ID
+            );
+
+            if (optimisticMessageIndex > -1) {
+              // Replace optimistic message with server-confirmed one
+              updatedMessages[optimisticMessageIndex] = {
+                ...newMessage,
+                sender: 'client', // Confirm sender as client
+                isPending: false, // No longer pending
+              };
+              isConfirmationOfOptimistic = true;
+            }
+          }
+
+          // If it wasn't a confirmation that replaced an optimistic message,
+          // add/update it using its final messageId.
+          if (!isConfirmationOfOptimistic) {
+            const existingIndex = updatedMessages.findIndex(m => m.messageId === newMessage.messageId);
+            const finalMessage = {
+              ...newMessage,
+              // Determine sender based on sentByOperator or if senderId matches current client
+              sender: newMessage.sentByOperator ? 'operator' : (newMessage.senderId === currentClientId ? 'client' : 'operator'),
+              isPending: false
+            };
+
+            if (existingIndex > -1) {
+              updatedMessages[existingIndex] = finalMessage; // Update existing
+            } else {
+              updatedMessages.push(finalMessage); // Add new
+            }
           }
         });
         
-        return Array.from(existingMessages.values())
-          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        return updatedMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       });
     };
     
@@ -175,8 +208,8 @@ function ClientChat() {
     // Check if socket is already connected
     if (!isSocketConnected()) {
       // Only initialize socket if not already connected
-      console.log('Initializing client socket with:', { clientName, clientNumber, clientId });
-      initClientSocket(clientName, clientNumber, clientId);
+      console.log('Initializing client socket with:', { clientName, clientNumber, clientPolice, clientId });
+      initClientSocket(clientName, clientNumber, clientPolice, clientId);
     } else {
       console.log('Using existing socket connection');
       setIsLoading(false);
@@ -255,7 +288,7 @@ function ClientChat() {
         currentSocket.off('connect_error');
       }
     };
-  }, [clientName, clientNumber, clientId, navigate]);
+  }, [clientName, clientNumber, clientId, clientPolice, navigate]);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -271,19 +304,43 @@ function ClientChat() {
     if (!inputMessage.trim() || !isConnected) return;
     
     const currentRoomId = roomId || sessionStorage.getItem('roomId');
-    
+    const actualClientId = sessionStorage.getItem('clientId'); // Get client ID for the message object
+
     if (!currentRoomId) {
       console.error('Cannot send message: room ID not available');
       return;
     }
+    if (!actualClientId) {
+      console.error('Cannot send message: client ID not available for optimistic update.');
+      return;
+    }
     
-    console.log('Sending message with room ID:', currentRoomId);
+    const tempId = `temp_${Date.now()}`; // Generate a unique temporary ID
+    const optimisticMessage = {
+      messageId: tempId,
+      text: inputMessage.trim(),
+      sender: 'client', // Message is from the current client
+      senderId: actualClientId, // Include senderId
+      timestamp: new Date().toISOString(),
+      sentByOperator: false, // Explicitly false
+      isPending: true // Mark as pending server confirmation
+    };
+
+    // Add message optimistically to the UI
+    setMessages(prevMessages => [...prevMessages, optimisticMessage]);
     
-    // Just send the message - no temporary message creation
+    // Send the actual message to the server
     sendClientMessage(inputMessage.trim(), currentRoomId);
     
     // Clear input
     setInputMessage('');
+
+    // Clear typing indicator immediately after sending
+    if (clientTypingTimeoutRef.current) {
+      clearTimeout(clientTypingTimeoutRef.current);
+      clientTypingTimeoutRef.current = null; 
+    }
+    sendTypingEvent(false);
   };
   
   // Handle input change and typing indicator
@@ -392,21 +449,21 @@ function ClientChat() {
           <div>
             <h2 className="text-lg font-semibold">
               {hasOperator 
-                ? `Chat with ${operatorInfo?.name || 'Operator'}`
-                : 'Waiting for Operator...'}
+                ? `${operatorInfo?.name || 'ოპერატორთან'}`
+                : 'ოპერატორის მოლოდინში...'}
             </h2>
             <p className="text-xs text-primary-100">
-              {!isConnected && <span className="text-red-200">⚠️ Reconnecting...</span>}
+              {!isConnected && <span className="text-red-200">⚠️ ხელახლა დაკავშირება...</span>}
               {isConnected && (hasOperator 
-                ? 'You are connected'
-                : 'You are in queue')}
+                ? 'თქვენ დაკავშირებული ხართ'
+                : 'თქვენ რიგში ხართ')}
             </p>
           </div>
           <div className="flex gap-1.5">
             {!hasOperator && (
               <button
                 onClick={handleCallbackRequest}
-                title="Request Callback"
+                title="ზარის მოთხოვნა"
                 className="p-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md transition-colors flex items-center justify-center shadow-sm hover:shadow-md"
               >
                 <FiPhoneOff className="text-lg" />
@@ -414,7 +471,7 @@ function ClientChat() {
             )}
             <button
               onClick={handleEndChat}
-              title="End Chat"
+              title="ჩატის დასრულება"
               className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors flex items-center justify-center shadow-sm hover:shadow-md"
             >
               <IoMdExit className="text-lg" />
@@ -468,31 +525,31 @@ function ClientChat() {
               value={inputMessage}
               onChange={handleInputChange}
               className="flex-1 px-3 py-1.5 border border-gray-200 rounded-md focus:ring-1 focus:ring-primary-400 focus:border-transparent transition-all outline-none text-sm"
-              placeholder="Type a message..."
+              placeholder="აკრიფეთ შეტყობინება..."
               disabled={!isConnected}
             />
             <button
               type="submit"
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm ${
+              className={`w-9 h-9 text-sm font-medium rounded-md transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm flex items-center justify-center ${
                 isConnected 
                   ? 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
               disabled={!isConnected}
             >
-              Send
+              <IoSend size={18} />
             </button>
           </form>
         </div>
         <div className="text-center text-xs text-gray-500 py-2 border-t border-gray-200">
-          © 2024 Crafted with <span role="img" aria-label="heart">♥</span> by CommuniQ
+          © 2024 შექმნილია <span role="img" aria-label="heart">♥</span>-ით CommuniQ-ის მიერ
         </div>
 
         {/* Feedback Modal */}
         {showFeedbackModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl p-5 max-w-sm w-full">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Rate your experience</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">შეაფასეთ თქვენი გამოცდილება</h3>
               
               {/* Star Rating */}
               <div className="flex justify-center space-x-1 mb-3">
@@ -513,7 +570,7 @@ function ClientChat() {
               <textarea
                 value={feedbackComment}
                 onChange={(e) => setFeedbackComment(e.target.value)}
-                placeholder="Leave a comment (optional)"
+                placeholder="დატოვეთ კომენტარი (სურვილისამებრ)"
                 className="w-full p-2.5 border border-gray-200 rounded-md mb-3 h-24 resize-none focus:ring-1 focus:ring-primary-400 focus:border-transparent text-sm"
               />
               
@@ -523,7 +580,7 @@ function ClientChat() {
                   onClick={() => setShowFeedbackModal(false)}
                   className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
                 >
-                  Cancel
+                  გაუქმება
                 </button>
                 <button
                   onClick={handleSubmitFeedback}
@@ -534,7 +591,7 @@ function ClientChat() {
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  Submit
+                  გაგზავნა
                 </button>
               </div>
             </div>

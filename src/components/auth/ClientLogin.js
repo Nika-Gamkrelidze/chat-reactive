@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { initClientSocket, setClientSessionHandler } from '../../services/socket/clientSocket';
-import { FaUser, FaShieldAlt, FaPhone } from 'react-icons/fa';
+import { FaUser, FaShieldAlt, FaPhone, FaRegCommentDots } from 'react-icons/fa';
 
 function ClientLogin() {
   const [name, setName] = useState('');
@@ -117,11 +117,26 @@ function ClientLogin() {
   return (
     <div className="h-full w-full flex items-center justify-center">
       <div className="h-full w-full max-w-sm bg-white rounded-xl shadow-lg p-6 flex flex-col">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center">
+            <div className="bg-gray-100 p-2.5 rounded-full mr-3 shadow-sm">
+              <FaRegCommentDots size={20} className="text-gray-500" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-gray-800">გამარჯობა</h2>
+              <p className="text-xs text-gray-500">ჩვენ 24/7-ზე ხელმისაწვდომნი ვართ</p>
+            </div>
+          </div>
+        </div>
+
         <div className="flex-grow flex flex-col justify-center">
           {error && (
             <div className="bg-red-100 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-3 text-sm">
               {error === 'Failed to connect. Please try again.' ? 
-                'Connection failed. Please try again.' : error}
+                'კავშირი ვერ მოხერხდა. გთხოვთ სცადოთ ხელახლა.' : 
+               (error === 'Login failed: Invalid session data received.' ?
+                'ავტორიზაცია ვერ მოხერხდა: მიღებულია არასწორი სესიის მონაცემები.' : error)
+              }
             </div>
           )}
           
@@ -179,13 +194,13 @@ function ClientLogin() {
               className="w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm text-sm"
               disabled={isLoading}
             >
-              {isLoading ? 'Connecting...' : 'Start Chat'}
+              {isLoading ? 'დაკავშირება...' : 'ჩატის დაწყება'}
             </button>
           </form>
         </div>
 
         <div className="text-center text-xs text-gray-500 pt-4 mt-auto">
-          © 2024 Crafted with <span role="img" aria-label="heart">♥</span> by CommuniQ
+          © 2024 შექმნილია <span role="img" aria-label="heart">♥</span>-ით CommuniQ-ის მიერ
         </div>
       </div>
     </div>
