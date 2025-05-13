@@ -5,7 +5,7 @@ import {
   setClientMessageHandler, 
   setClientSessionHandler,
   sendClientMessage, 
-  sendClientTypingStatus,
+  sendTypingEvent,
   clientStorage,
   getClientSocket,
   sendClientEndChat,
@@ -28,7 +28,8 @@ function ClientChat() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
+  const clientTypingTimeoutRef = useRef(null);
+  const operatorTypingTimeoutRef = useRef(null);
   const socketInitializedRef = useRef(false);
   const navigate = useNavigate();
   const [roomId, setRoomId] = useState(null);
@@ -58,7 +59,25 @@ function ClientChat() {
       
       // Handle typing indicator
       if (message.type === 'typing') {
-        setOperatorTyping(message.isTyping);
+        console.log('[ClientChat] Typing event received:', message);
+        // Clear existing timeout
+        if (operatorTypingTimeoutRef.current) {
+          clearTimeout(operatorTypingTimeoutRef.current);
+        }
+
+        if (message.isTyping) {
+          console.log('[ClientChat] Setting operatorTyping to TRUE');
+          setOperatorTyping(true);
+          // Set a new timeout to hide the indicator
+          operatorTypingTimeoutRef.current = setTimeout(() => {
+            console.log('[ClientChat] Operator typing timeout expired, setting to FALSE');
+            setOperatorTyping(false);
+          }, 2500); // Operator typing indicator timeout (2.5 seconds)
+        } else {
+          console.log('[ClientChat] Setting operatorTyping to FALSE (isTyping was false)');
+          setOperatorTyping(false); // Explicitly set to false if isTyping is false
+          operatorTypingTimeoutRef.current = null;
+        }
         return;
       }
       
@@ -89,6 +108,23 @@ function ClientChat() {
     // Define session handler function
     const handleSessionUpdate = (sessionData) => {
       console.log('Session update received in ClientChat:', sessionData);
+
+      // Handle feedback processed signal
+      if (sessionData.feedbackProcessed) {
+        // Cleanup and redirect regardless of success, as the feedback process is complete.
+        console.log(`Feedback process finished (success: ${sessionData.success}), cleaning up and redirecting.`);
+        // Reset component state
+        setMessages([]);
+        setHasOperator(false);
+        setOperatorInfo(null);
+        setRoomId(null);
+        setIsConnected(false);
+        // Navigate to login
+        navigate('/client/login');
+
+        return; // Stop further processing for this event
+      }
+
       setIsLoading(false);
       
       // Handle operator assignment
@@ -196,6 +232,14 @@ function ClientChat() {
     return () => {
       clearTimeout(connectionTimeout);
       
+      // Clear any pending typing timeouts
+      if (clientTypingTimeoutRef.current) {
+        clearTimeout(clientTypingTimeoutRef.current);
+      }
+      if (operatorTypingTimeoutRef.current) {
+        clearTimeout(operatorTypingTimeoutRef.current);
+      }
+      
       // Don't disconnect the socket, just remove the handlers
       const currentSocket = getClientSocket();
       if (currentSocket) {
@@ -242,16 +286,16 @@ function ClientChat() {
     if (!isConnected) return;
     
     // Send typing indicator
-    sendClientTypingStatus(true);
+    sendTypingEvent(true);
     
     // Clear previous timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
+    if (clientTypingTimeoutRef.current) {
+      clearTimeout(clientTypingTimeoutRef.current);
     }
     
     // Set timeout to clear typing indicator
-    typingTimeoutRef.current = setTimeout(() => {
-      sendClientTypingStatus(false);
+    clientTypingTimeoutRef.current = setTimeout(() => {
+      sendTypingEvent(false);
     }, 2000);
   };
   
@@ -281,32 +325,44 @@ function ClientChat() {
   };
   
   const handleSubmitFeedback = () => {
+    // Only pass score and comment
     const feedbackData = {
-      clientId,
-      clientNumber,
-      clientName,
-      feedbackScore,
-      feedbackComment,
-      operatorId: operatorInfo?.id,
-      operatorName: operatorInfo?.name
+      score: feedbackScore,
+      comment: feedbackComment
     };
     
     sendClientFeedback(feedbackData);
     setShowFeedbackModal(false);
+    // Cleanup and navigation are handled in handleSessionUpdate after feedback_submitted event
+  };
 
-    // Use the new cleanup function
-    cleanupClientSocket();
+  const handleShowFeedbackModal = () => {  
+    setShowFeedbackModal(true);
+  };
+  
+  const handleCallbackRequest = () => {
+    const currentRoomId = sessionStorage.getItem('roomId');
     
-    // Reset component state
-    setMessages([]);
-    setHasOperator(false);
-    setOperatorInfo(null);
-    setRoomId(null);
-    setIsConnected(false);
+    if (!currentRoomId) {
+      console.error('Cannot send callback request: room ID not available');
+      return;
+    }
+
+    const callbackData = {
+      userId: clientId,
+      roomId: currentRoomId,
+      name: clientName,
+      number: clientNumber
+    };
+    
+    sendClientCallbackRequest(callbackData);
     
     // Navigate to login
     navigate('/client/login');
   };
+  
+  // Log operatorTyping state during render
+  console.log('[ClientChat] Rendering - operatorTyping:', operatorTyping);
   
   if (isLoading) {
     return (
@@ -361,7 +417,7 @@ function ClientChat() {
                     : 'bg-white border border-gray-200 text-gray-800'
                 }`}
               >
-                <p className="text-sm">{msg.text}</p>
+                <p className="text-sm break-words">{msg.text}</p>
                 <p className={`text-xs mt-1 ${
                   msg.sender === 'client' ? 'text-primary-100' : 'text-gray-400'
                 }`}>

@@ -110,9 +110,10 @@ export const clientStorage = {
   },
   
   // Store user credentials
-  storeUserCredentials: function(name, number) {
+  storeUserCredentials: function(name, number, police) {
     sessionStorage.setItem('clientName', name);
     sessionStorage.setItem('clientNumber', number);
+    sessionStorage.setItem('clientPolice', police);
   },
   
   // Clear all data
@@ -132,6 +133,7 @@ export const clientStorage = {
     sessionStorage.removeItem('messages');
     sessionStorage.removeItem('clientName');
     sessionStorage.removeItem('clientNumber');
+    sessionStorage.removeItem('clientPolice');
     sessionStorage.removeItem('clientId');
   }
 };
@@ -252,11 +254,12 @@ export const createClientSocket = () => {
     });
     
     // Handle typing indicator
-    socket.on('operator-typing', (data) => {
+    socket.on('operator_typing', (data) => {
       if (messageHandler && typeof messageHandler === 'function') {
+        // Pass the full data object including roomId, userId, isTyping
         messageHandler({
           type: 'typing',
-          isTyping: data.isTyping
+          ...data // Contains isTyping, roomId, userId
         });
       }
     });
@@ -272,6 +275,25 @@ export const createClientSocket = () => {
         sessionHandler(data);
       }
     });
+
+    socket.on('ask_for_feedback', () => {
+      // Use the existing session handler to communicate back to the component
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({ showFeedback: true });
+      }
+    });
+
+    socket.on('feedback_submitted', (data) => {
+      console.log('Received feedback_submitted event:', data);
+      // Use the session handler to notify the component
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        // Notify component *before* cleanup
+        sessionHandler({ feedbackProcessed: true, success: data.success });
+
+        // Cleanup socket regardless of success
+        cleanupClientSocket();
+      }
+    });
   }
   
   return socket;
@@ -282,8 +304,8 @@ export const isSocketConnected = () => {
   return socket && socket.connected;
 };
 
-// Modify initClientSocket to prevent duplicate connections
-export const initClientSocket = (name, number, clientId = null) => {
+// Modify initClientSocket to accept police value and include it in metadata
+export const initClientSocket = (name, number, police, clientId = null) => {
   // If socket exists and is connected, just return it
   if (isSocketConnected()) {
     console.log('Socket already connected, reusing existing connection');
@@ -298,15 +320,18 @@ export const initClientSocket = (name, number, clientId = null) => {
     socket.disconnect();
   }
   
-  // Store user credentials
-  clientStorage.storeUserCredentials(name, number);
+  // Store user credentials including police
+  clientStorage.storeUserCredentials(name, number, police);
   
   // Set authentication data
   socket.auth = {
     name: name,
     number: number,
     userId: clientId || sessionStorage.getItem('clientId'),
-    type: "client"
+    type: 'client',
+    metadata: {
+      police: police
+    }
   };
   
   console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and userId: ${clientId || 'null'}`);
@@ -326,11 +351,13 @@ export const reconnectClientSocket = () => {
   const clientId = sessionStorage.getItem('clientId');
   const name = sessionStorage.getItem('clientName');
   const number = sessionStorage.getItem('clientNumber');
+  // Get police from storage
+  const police = sessionStorage.getItem('clientPolice');
   
-  console.log('Attempting to reconnect with stored credentials:', { clientId, name, number });
+  console.log('Attempting to reconnect with stored credentials:', { clientId, name, number, police });
   
   // If we have stored credentials, reconnect
-  if (name && number) {
+  if (name && number && police) {
     // Create socket instance if not already created
     if (!socket) {
       createClientSocket();
@@ -341,10 +368,13 @@ export const reconnectClientSocket = () => {
       name: name,
       number: number,
       userId: clientId, // Include clientId if available
-      type: "client"
+      type: "client",
+      metadata: {
+        police: police
+      }
     };
     
-    console.log(`Reconnecting to socket server as client with name: ${name}, number: ${number}, and userId: ${clientId || 'null'}`);
+    console.log(`Reconnecting to socket server as client with name: ${name}, number: ${number}, police: ${police}, and userId: ${clientId || 'null'}`);
     
     // Connect to the server
     if (!socket.connected) {
@@ -418,10 +448,23 @@ export const sendClientMessage = (text, roomId) => {
   socket.emit('send_message', messageData);
 };
 
-// Send typing indicator to the operator
-export const sendClientTypingStatus = (isTyping) => {
+// Send typing indicator event to the server
+export const sendTypingEvent = (isTyping) => {
   if (socket && socket.connected) {
-    socket.emit('client-typing', { isTyping });
+    const roomId = clientStorage.roomId || sessionStorage.getItem('roomId');
+    const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
+
+    if (!roomId || !clientId) {
+      console.error("Cannot send typing event: roomId or clientId missing.");
+      return;
+    }
+
+    socket.emit('typing', {
+      roomId,
+      userId: clientId,
+      userType: 'client',
+      isTyping
+    });
   }
 };
 
@@ -439,16 +482,37 @@ export const clearClientData = () => {
 // Send end chat notification to server
 export const sendClientEndChat = (clientData) => {
   if (socket && socket.connected) {
-    socket.emit('client-ended-chat', clientData);
+    socket.emit('end_chat', clientData);
+    // Note: We don't disconnect here anymore as we need to wait for feedback submission
   }
 };
 
 // Send feedback to server
 export const sendClientFeedback = (feedbackData) => {
   if (socket && socket.connected) {
-    socket.emit('client-feedback', feedbackData);
-    // Cleanup after sending feedback
-    cleanupClientSocket();
+    const currentRoomId = clientStorage.roomId || sessionStorage.getItem('roomId');
+    const currentClientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
+
+    if (!currentRoomId) {
+      console.error("Cannot send feedback: Room ID not found.");
+      return;
+    }
+    if (!currentClientId) {
+        console.error("Cannot send feedback: Client ID not found.");
+        return;
+    }
+
+    // feedbackData should contain { score, comment }
+    const payload = {
+        // Rename score to rating
+        rating: feedbackData.score, 
+        comment: feedbackData.comment,
+        roomId: currentRoomId,
+        // Add clientId
+        clientId: currentClientId
+    };
+
+    socket.emit('client_feedback', payload);
   }
 };
 

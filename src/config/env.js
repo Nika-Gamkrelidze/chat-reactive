@@ -3,7 +3,7 @@ const config = {
   // Server connection settings
   server: {
     protocol: 'https',
-    // host: '192.168.14.46',
+    // host: '192.168.14.56',
     host: 'chat.communiq.ge',
     port: '4000', // Empty string for default port
     namespace: 'namespace1',

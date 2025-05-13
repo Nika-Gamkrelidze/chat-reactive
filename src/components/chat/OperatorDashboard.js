@@ -14,8 +14,12 @@ import {
   disconnectOperatorSocket,
   operatorStorage,
   getOperatorSocket,
-  acceptClient
+  acceptClient,
+  setClientChatClosedHandler,
+  sendOperatorTypingEvent,
+  setTypingHandler
 } from '../../services/socket/operatorSocket';
+import ClientInfoSidebar from './ClientInfoSidebar';
 
 function OperatorDashboard() {
   const navigate = useNavigate();
@@ -32,12 +36,31 @@ function OperatorDashboard() {
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [operatorStatus, setOperatorStatus] = useState('active');
   
+  // State to track client typing status { clientId: timeoutId | null }
+  const [clientTypingStatus, setClientTypingStatus] = useState({});
+  
   // Refs to prevent multiple effect runs
   const socketInitializedRef = useRef(false);
   const messageHandlerRef = useRef(null);
   const clientListHandlerRef = useRef(null);
   const clientQueueHandlerRef = useRef(null);
   const sessionHandlerRef = useRef(null);
+  const clientChatClosedHandlerRef = useRef(null);
+  const typingHandlerRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+
+  // Function to scroll to bottom of messages
+  const scrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Effect to scroll when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // Initialize socket and set up event handlers
   useEffect(() => {
@@ -78,18 +101,13 @@ function OperatorDashboard() {
     messageHandlerRef.current = (message) => {
       console.log('Message received in dashboard:', message);
       
-      // Handle typing indicator
-      if (message.type === 'typing') {
-        // Handle typing indicator if needed
-        return;
-      }
-      
+      const clientId = message.clientId;
+      // Skip if we don't have a clientId
+      if (!clientId) return;
+
+      const isFromOperator = message.senderId === operatorStorage.operatorId;
+
       setMessages(prevMessages => {
-        const clientId = message.clientId;
-        
-        // Skip if we don't have a clientId
-        if (!clientId) return prevMessages;
-        
         // Initialize or get existing messages for this client
         const clientMessages = prevMessages[clientId] || [];
         
@@ -100,7 +118,7 @@ function OperatorDashboard() {
           // Add new message
           const updatedClientMessages = [...clientMessages, {
             ...message,
-            sentByOperator: message.senderId === operatorStorage.operatorId
+            sentByOperator: isFromOperator
           }].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
           
           return {
@@ -111,17 +129,46 @@ function OperatorDashboard() {
         
         return prevMessages;
       });
+
+      // --- Add logic to update unread count ---
+      // Increment unread count only for messages from the client
+      // and only if the client is not currently selected
+      if (!isFromOperator) {
+         setActiveClients(prevClients => 
+           prevClients.map(client => {
+             if (client.id === clientId && (!selectedClient || selectedClient.id !== clientId)) {
+               // Increment unread count, initializing if it doesn't exist
+               const newUnreadCount = (client.unreadCount || 0) + 1;
+               return { ...client, unreadCount: newUnreadCount };
+             }
+             return client;
+           })
+         );
+      }
+      // --- End unread count logic ---
     };
     
     // Define client list handler
-    clientListHandlerRef.current = (clients) => {
-      console.log('Active clients updated:', clients);
-      setActiveClients(clients);
+    clientListHandlerRef.current = (clientsFromServer) => {
+      console.log('Active clients updated:', clientsFromServer);
       
-      // If we have a selected client that's no longer active, deselect it
-      if (selectedClient && !clients.some(c => c.id === selectedClient.id)) {
-        setSelectedClient(null);
-      }
+      setActiveClients(prevClients => {
+        // Create a map of existing clients for quick lookup of unread counts
+        const existingClientMap = new Map(prevClients.map(c => [c.id, c.unreadCount || 0]));
+        
+        // Map the new list, preserving existing unread counts
+        const updatedClients = clientsFromServer.map(newClient => ({
+          ...newClient,
+          unreadCount: existingClientMap.get(newClient.id) || 0 // Keep existing count or default to 0
+        }));
+
+        // If the currently selected client is no longer in the active list, deselect it
+        if (selectedClient && !updatedClients.some(c => c.id === selectedClient.id)) {
+          setSelectedClient(null);
+        }
+        
+        return updatedClients;
+      });
     };
     
     // Define client queue handler
@@ -138,39 +185,70 @@ function OperatorDashboard() {
       
       // Handle operator data
       if (sessionData.operator) {
-        // Update operator info if needed
+        // Update operator status if provided
+        if (sessionData.operator?.status) {
+          setOperatorStatus(sessionData.operator.status);
+        }
       }
       
-      // Handle active rooms from reconnection
+      let clientsToSet = [];
+      let messagesToSet = messages; // Start with existing messages
+
+      // Handle active rooms first as they contain specific status and messages
       if (sessionData.activeRooms && Array.isArray(sessionData.activeRooms)) {
-        const clients = sessionData.activeRooms
-          .filter(room => room.client)
-          .map(room => room.client);
-          
-        if (clients.length > 0) {
-          setActiveClients(clients);
-        }
-        
-        // Initialize messages from active rooms
-        const messagesMap = {};
+        clientsToSet = sessionData.activeRooms
+          .filter(room => room.client) // Ensure room has a client object
+          .map(room => ({
+            ...room.client, // Spread client details
+            roomId: room.roomId, // Ensure roomId is included
+            roomStatus: room.status || 'active', // Add roomStatus for consistency
+            unreadCount: 0 // Initialize unread count
+          }));
+
+        // Initialize or update messages from active rooms
+        const messagesMap = { ...messagesToSet }; // Start with existing messages
         sessionData.activeRooms.forEach(room => {
-          if (room.client && room.messages) {
+          if (room.client && room.messages && room.client.id) {
+            // Ensure messages are mapped correctly with sentByOperator flag
             messagesMap[room.client.id] = room.messages.map(msg => ({
               ...msg,
-              sentByOperator: msg.senderId === sessionData.operator.id
-            }));
+              sentByOperator: msg.senderId === sessionData.operator?.id, // Use optional chaining for safety
+              clientId: room.client.id // Ensure clientId is present
+            })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
           }
         });
-        
-        if (Object.keys(messagesMap).length > 0) {
-          setMessages(messagesMap);
-        }
+        messagesToSet = messagesMap; // Update the messages to be set
+      } 
+      // Fallback: If activeRooms are not present or empty, try using activeClients
+      else if (sessionData.activeClients && Array.isArray(sessionData.activeClients)) {
+        console.log("Using sessionData.activeClients as fallback.");
+        // Map activeClients, ensuring a default status if missing
+        clientsToSet = sessionData.activeClients.map(client => ({
+           ...client,
+           roomStatus: client.roomStatus || client.status || 'active', 
+           unreadCount: client.unreadCount || 0 // Preserve existing or default to 0
+        }));
       }
       
-      // If we have active clients in the session data, update the state
-      if (sessionData.activeClients && Array.isArray(sessionData.activeClients)) {
-        setActiveClients(sessionData.activeClients);
+      // Update the state only if we have clients to set
+      // Merge with existing clients to preserve unread counts if possible
+      if (clientsToSet.length > 0) {
+        setActiveClients(prevClients => {
+            const existingClientMap = new Map(prevClients.map(c => [c.id, c.unreadCount || 0]));
+            return clientsToSet.map(newClient => ({
+                ...newClient,
+                // Prioritize unread count from new data if available (e.g., from fallback), 
+                // otherwise keep existing count or default to 0
+                unreadCount: newClient.unreadCount || existingClientMap.get(newClient.id) || 0 
+            }));
+        });
       }
+
+      // Log the final clientsToSet before updating state
+      console.log('Clients derived from session data:', clientsToSet);
+
+      // Update messages state
+      setMessages(messagesToSet);
       
       // If we have pending clients in the session data, update the state
       if (sessionData.pendingClients && Array.isArray(sessionData.pendingClients)) {
@@ -178,11 +256,57 @@ function OperatorDashboard() {
       }
     };
     
+    // Define handler for client ending chat
+    clientChatClosedHandlerRef.current = (closedClientId) => {
+      console.log('Handling client_ended_chat for client ID:', closedClientId);
+      // Check if the closed client is the currently selected one
+      if (selectedClient && selectedClient.id === closedClientId) {
+        // Update the selected client state to reflect the closure
+        setSelectedClient(prevSelectedClient => {
+          if (prevSelectedClient && prevSelectedClient.id === closedClientId) {
+            return { ...prevSelectedClient, roomStatus: 'closed' };
+          }
+          return prevSelectedClient;
+        });
+        // No need to remove from active clients here as clientListHandler already does
+      }
+    };
+    
+    // Define typing handler
+    typingHandlerRef.current = (typingData) => {
+      const { userId, isTyping } = typingData; // userId here is the clientId
+      console.log(`Client typing update: ${userId} is typing: ${isTyping}`);
+
+      setClientTypingStatus(prevStatus => {
+        const existingTimeoutId = prevStatus[userId];
+
+        // Clear existing timeout if there is one
+        if (existingTimeoutId) {
+          clearTimeout(existingTimeoutId);
+        }
+
+        if (isTyping) {
+          // Set a new timeout to automatically clear the status
+          const newTimeoutId = setTimeout(() => {
+            setClientTypingStatus(prev => ({ ...prev, [userId]: null }));
+          }, 2500); // Adjust timeout duration as needed (e.g., 2.5 seconds)
+
+          // Return new state with the timeout ID
+          return { ...prevStatus, [userId]: newTimeoutId };
+        } else {
+          // If isTyping is false, just clear the status
+          return { ...prevStatus, [userId]: null };
+        }
+      });
+    };
+    
     // Set up handlers
     setMessageHandler(messageHandlerRef.current);
     setClientListHandler(clientListHandlerRef.current);
     setClientQueueHandler(clientQueueHandlerRef.current);
     setSessionHandler(sessionHandlerRef.current);
+    setClientChatClosedHandler(clientChatClosedHandlerRef.current);
+    setTypingHandler(typingHandlerRef.current);
     
     // Attempt to reconnect with stored credentials
     console.log('Attempting to reconnect operator with stored credentials:', { operatorName, operatorNumber, operatorId });
@@ -203,18 +327,20 @@ function OperatorDashboard() {
       setClientListHandler(null);
       setClientQueueHandler(null);
       setSessionHandler(null);
+      setClientChatClosedHandler(null);
+      setTypingHandler(null);
     };
   }, [navigate, selectedClient]);
   
   // Handle client selection
   const handleClientSelect = (client) => {
-    console.log('Selected client:', client);
+    console.log('Selected client object:', client);
     setSelectedClient(client);
     
-    // Mark client as read when selected
+    // Mark client as read and RESET unread count when selected
     setActiveClients(prevClients => 
       prevClients.map(c => 
-        c.id === client.id ? { ...c, hasUnread: false } : c
+        c.id === client.id ? { ...c, unreadCount: 0 } : c // Reset count to 0
       )
     );
     
@@ -279,16 +405,104 @@ function OperatorDashboard() {
   
   // Add handler for status toggle
   const handleStatusToggle = () => {
-    const newStatus = operatorStatus === 'active' ? 'away' : 'active';
+    // Toggle between 'active' and 'paused'
+    const newStatus = operatorStatus === 'active' ? 'paused' : 'active';
+    
     const socket = getOperatorSocket();
     
     if (socket && socket.connected) {
+      console.log(`Requesting status change to: ${newStatus}`); // Add log
       socket.emit('change_status', { 
         id: operatorStorage.operatorId,
         status: newStatus
       });
-      setOperatorStatus(newStatus); // Update local state
+      // Update state optimistically, server should confirm via session update if needed
+      setOperatorStatus(newStatus);
+    } else {
+        console.warn('Cannot change status: socket not connected.'); // Add warning
     }
+  };
+  
+  // Handle ending a chat
+  const handleEndChat = () => {
+    if (!selectedClient || !isConnected) return;
+    
+    // Get room ID from the selected client or from the messages
+    let roomId = selectedClient.roomId;
+    
+    // If roomId is not directly available in the client object, try to find it in messages
+    if (!roomId && messages[selectedClient.id] && messages[selectedClient.id].length > 0) {
+      roomId = messages[selectedClient.id][0].roomId;
+    }
+    
+    // If still no roomId, try to get it from operatorStorage
+    if (!roomId && operatorStorage.clients && operatorStorage.clients[selectedClient.id]) {
+      roomId = operatorStorage.clients[selectedClient.id].roomId;
+    }
+    
+    if (!roomId) {
+      console.error('Cannot end chat: room ID not available for client', selectedClient.id);
+      alert('Cannot end chat: connection issue. Please try again later.');
+      return;
+    }
+    
+    const socket = getOperatorSocket();
+    if (socket && socket.connected) {
+      // Send end_chat event
+      socket.emit('end_chat', {
+        roomId,
+        userId: operatorStorage.operatorId,
+        userType: 'operator'
+      });
+      
+      // Update client roomStatus in active clients list
+      setActiveClients(prev => prev.map(client => 
+        client.id === selectedClient.id 
+          ? { ...client, roomStatus: 'closed' }
+          : client
+      ));
+      
+      // Update client roomStatus in operator storage
+      if (operatorStorage.clients && operatorStorage.clients[selectedClient.id]) {
+        operatorStorage.clients[selectedClient.id].roomStatus = 'closed';
+      }
+      
+      // Update selected client roomStatus
+      setSelectedClient(prev => prev ? { ...prev, roomStatus: 'closed' } : null);
+      
+      operatorStorage.saveToStorage();
+    }
+  };
+  
+  // Handle input change for operator typing
+  const handleInputChange = (e) => {
+    setInputMessage(e.target.value);
+
+    if (!selectedClient || !isConnected) return;
+
+    // Find roomId
+    let roomId = selectedClient.roomId;
+    if (!roomId && operatorStorage.clients && operatorStorage.clients[selectedClient.id]) {
+      roomId = operatorStorage.clients[selectedClient.id].roomId;
+    }
+
+    if (!roomId) {
+      console.error('Cannot send typing event: room ID not available for client', selectedClient.id);
+      return;
+    }
+
+    // Send typing=true immediately
+    sendOperatorTypingEvent(roomId, true);
+
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set timeout to send typing=false
+    typingTimeoutRef.current = setTimeout(() => {
+      sendOperatorTypingEvent(roomId, false);
+    }, 2000); // Send stopped typing after 2 seconds of inactivity
   };
   
   // Render dashboard
@@ -315,13 +529,26 @@ function OperatorDashboard() {
         <div className="flex gap-2">
           <button
             onClick={handleStatusToggle}
-            className={`px-4 py-2 rounded ${
-              operatorStatus === 'active'
-                ? 'bg-yellow-500 hover:bg-yellow-600'
-                : 'bg-green-500 hover:bg-green-600'
-            } text-white`}
+            className={`px-4 py-2 rounded text-white ${
+              operatorStatus === 'active' ? 'bg-yellow-500 hover:bg-yellow-600' :
+              'bg-green-500 hover:bg-green-600' // Only active/paused states
+            }`}
+            disabled={!isConnected} // Disable if not connected
           >
-            {operatorStatus === 'active' ? 'პაუზა' : 'გაგრძელება'}
+            {operatorStatus === 'active' ? 'პაუზაზე გადასვლა' :
+             'გააქტიურება' // Only two options needed
+            }
+          </button>
+          <button
+            onClick={handleEndChat}
+            className={`px-4 py-2 rounded text-white ${
+              !selectedClient || selectedClient.roomStatus === 'closed' || !isConnected
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-gray-500 hover:bg-gray-600'
+            }`}
+            disabled={!selectedClient || selectedClient.roomStatus === 'closed' || !isConnected}
+          >
+            ჩათის დასრულება
           </button>
           <button
             onClick={handleLogout}
@@ -342,24 +569,52 @@ function OperatorDashboard() {
         </div>
       ) : (
         <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar */}
+          {/* Sidebar - Client List */}
           <div className="w-64 bg-white border-r flex-shrink-0">
             <div className="h-full overflow-y-auto p-4">
               <h2 className="text-lg font-medium text-gray-700 mb-2">მომხმარებლები</h2>
-              {activeClients.length > 0 ? (
+              {/* Filter out clients with 'closed' roomStatus before mapping */}
+              {activeClients.filter(client => client.roomStatus !== 'closed').length > 0 ? (
                 <ul className="space-y-2">
-                  {activeClients.map(client => (
+                  {activeClients
+                    .filter(client => client.roomStatus !== 'closed') // Only show non-closed chats
+                    .map(client => (
                     <li 
                       key={client.id}
                       onClick={() => handleClientSelect(client)}
-                      className={`p-2 border rounded cursor-pointer ${
+                      className={`p-2 border rounded cursor-pointer flex justify-between items-center ${ // Use flex for layout
                         selectedClient && selectedClient.id === client.id
                           ? 'bg-blue-50 border-blue-200'
                           : 'bg-white hover:bg-gray-50'
                       }`}
                     >
-                      <div className="font-medium">{client.name}</div>
-                      <div className="text-sm text-gray-500">{client.number}</div>
+                      {/* Client Info */}
+                      <div>
+                        <div className="font-medium">{client.name}</div>
+                        <div className="text-sm text-gray-500">{client.number}</div>
+                      </div>
+                      {/* Status and Unread Count */}
+                      <div className="flex items-center space-x-2"> 
+                        {/* Unread Count Badge - Show only if count > 0 AND not selected */}
+                        {client.unreadCount > 0 && (!selectedClient || selectedClient.id !== client.id) && (
+                          <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                            {client.unreadCount}
+                          </span>
+                        )}
+                        {/* Status Indicator */}
+                        <div className="flex items-center">
+                          <span className="text-xs text-gray-500 mr-1"> {/* Reduced margin */}
+                            {client.roomStatus === 'active' ? 'აქტიური' : 'დასრულებული'}
+                          </span>
+                          <span className={`w-2 h-2 rounded-full ${
+                            client.roomStatus === 'active' // Color based on roomStatus
+                              ? 'bg-green-500' 
+                              : client.roomStatus === 'closed'
+                                ? 'bg-red-500'
+                                : 'bg-yellow-500' // Keep yellow for potential other statuses, e.g., paused by operator?
+                          }`}></span>
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -373,14 +628,6 @@ function OperatorDashboard() {
           <div className="flex-1 flex flex-col overflow-hidden">
             {selectedClient ? (
               <>
-                {/* Chat header */}
-                <div className="bg-white border-b p-4 flex-shrink-0">
-                  <div>
-                    <h2 className="font-medium">{selectedClient.name}</h2>
-                    <p className="text-sm text-gray-500">{selectedClient.number}</p>
-                  </div>
-                </div>
-                
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
                   {messages[selectedClient.id] && messages[selectedClient.id].length > 0 ? (
@@ -396,7 +643,7 @@ function OperatorDashboard() {
                             ? 'bg-blue-500 text-white' 
                             : 'bg-gray-200 text-gray-800'
                         }`}>
-                          {message.text}
+                          <span className="break-words">{message.text}</span>
                           <div className="text-xs mt-1 opacity-75">
                             {new Date(message.timestamp).toLocaleTimeString()}
                           </div>
@@ -408,6 +655,19 @@ function OperatorDashboard() {
                       შეტყობინებები არ არის
                     </div>
                   )}
+                  {/* Client Typing Indicator */}
+                  {selectedClient && clientTypingStatus[selectedClient.id] && (
+                    <div className="flex justify-start mb-4">
+                      <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-xs">
+                        <div className="flex items-center space-x-1">
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100"></div>
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-200"></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* End Client Typing Indicator */}
                 </div>
 
                 {/* Message input */}
@@ -416,8 +676,8 @@ function OperatorDashboard() {
                     <input 
                       type="text"
                       value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      placeholder="შეიყვანეთ შეტყობინება..."
+                      onChange={handleInputChange}
+                      placeholder={selectedClient.roomStatus === 'closed' ? "ჩათი დასრულებულია" : "შეიყვანეთ შეტყობინება..."}
                       className="flex-1 p-2 border rounded-l-lg"
                       disabled={!isConnected}
                     />
@@ -441,6 +701,10 @@ function OperatorDashboard() {
               </div>
             )}
           </div>
+          {/* Client Info Sidebar - Right Side */}
+          {selectedClient && (
+            <ClientInfoSidebar client={selectedClient} />
+          )}
         </div>
       )}
     </div>
