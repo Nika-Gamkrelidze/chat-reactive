@@ -19,7 +19,7 @@ function AppRoutes() {
           </PrivateRoute>
         } 
       />
-      <Route path="/operator/login" element={<OperatorLogin />} />
+      {/* <Route path="/operator/login" element={<OperatorLogin />} />
       <Route 
         path="/operator/dashboard" 
         element={
@@ -27,8 +27,8 @@ function AppRoutes() {
             <OperatorDashboard />
           </PrivateRoute>
         } 
-      />
-      <Route path="/" element={<Navigate to="/operator/login" replace />} />
+      /> */}
+      <Route path="/" element={<Navigate to="/client/login" replace />} />
     </Routes>
   );
 }

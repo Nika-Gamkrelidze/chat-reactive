@@ -200,7 +200,7 @@ function ClientLogin() {
         </div>
 
         <div className="text-center text-xs text-gray-500 pt-4 mt-auto">
-          © 2024 Created with <span role="img" aria-label="heart">♥</span> by CommuniQ-
+          © 2024 Created with <span role="img" aria-label="heart">♥</span> by CommuniQ
         </div>
       </div>
     </div>

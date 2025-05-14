@@ -11,5 +11,6 @@ body,
 
 /* Any global styles you want to add */
 body {
+  font-family: 'BPGNinoMtavruliBold', sans-serif; /* Added BPGNinoMtavruliBold with a fallback */
   @apply antialiased;
 }

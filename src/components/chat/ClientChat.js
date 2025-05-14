@@ -542,7 +542,7 @@ function ClientChat() {
           </form>
         </div>
         <div className="text-center text-xs text-gray-500 py-2 border-t border-gray-200">
-        © 2024 Created with <span role="img" aria-label="heart">♥</span> by CommuniQ-
+        © 2024 Created with <span role="img" aria-label="heart">♥</span> by CommuniQ
         </div>
 
         {/* Feedback Modal */}

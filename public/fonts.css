@@ -1,0 +1,10 @@
+@font-face {
+  font-family: 'BPGNinoMtavruliBold';
+  src: url('./fonts/bpgninomtavrulibold.eot'); /* IE9 Compat Modes */
+  src: url('./fonts/bpgninomtavrulibold.eot?#iefix') format('embedded-opentype'), /* IE6-IE8 */
+       url('./fonts/bpgninomtavrulibold.woff') format('woff'), /* Modern Browsers */
+       url('./fonts/bpgninomtavrulibold.ttf') format('truetype'), /* Safari, Android, iOS */
+       url('./fonts/bpgninomtavrulibold.svg#BPGNinoMtavruliBold') format('svg'); /* Legacy iOS */
+  font-weight: normal;
+  font-style: normal;
+} 
