@@ -200,7 +200,7 @@ function ClientLogin() {
         </div>
 
         <div className="text-center text-xs text-gray-500 pt-4 mt-auto">
-          © 2024 შექმნილია <span role="img" aria-label="heart">♥</span>-ით CommuniQ-ის მიერ
+          © 2024 Created with <span role="img" aria-label="heart">♥</span> by CommuniQ-
         </div>
       </div>
     </div>

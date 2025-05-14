@@ -450,7 +450,7 @@ function ClientChat() {
             <h2 className="text-lg font-semibold">
               {hasOperator 
                 ? `${operatorInfo?.name || 'ოპერატორთან'}`
-                : 'ოპერატორის მოლოდინში...'}
+                : 'მოლოდინში...'}
             </h2>
             <p className="text-xs text-primary-100">
               {!isConnected && <span className="text-red-200">⚠️ ხელახლა დაკავშირება...</span>}
@@ -542,7 +542,7 @@ function ClientChat() {
           </form>
         </div>
         <div className="text-center text-xs text-gray-500 py-2 border-t border-gray-200">
-          © 2024 შექმნილია <span role="img" aria-label="heart">♥</span>-ით CommuniQ-ის მიერ
+        © 2024 Created with <span role="img" aria-label="heart">♥</span> by CommuniQ-
         </div>
 
         {/* Feedback Modal */}
