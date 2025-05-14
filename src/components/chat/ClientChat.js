@@ -135,7 +135,7 @@ function ClientChat() {
           }
         });
         
-        return updatedMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        return updatedMessages;
       });
     };
     

@@ -47,7 +47,6 @@ export const clientStorage = {
     if (existingIndex === -1) {
       this.messages.push(message);
       // Sort messages by timestamp
-      this.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       this.saveToStorage();
       return true;
     }
