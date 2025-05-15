@@ -100,7 +100,7 @@ function OperatorLogin() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-soft p-8 text-center">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">ოპერატორის შესვლა</h1>
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">გთხოვთ გადადით ჩათის სტატუსზე</h1>
         
         {error && (
           <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
@@ -115,7 +115,7 @@ function OperatorLogin() {
           </div>
         ) : (
           !error && (
-            <div className="text-gray-700 text-xl font-medium my-8">
+            <div className="text-red-700 text-xl font-medium my-8 ">
               ჩათიდან გასული ხართ
             </div>
           )

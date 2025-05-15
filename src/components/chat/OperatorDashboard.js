@@ -554,7 +554,7 @@ function OperatorDashboard() {
             }`}
             disabled={!isConnected} // Disable if not connected
           >
-            {operatorStatus === 'active' ? 'პაუზაზე გადასვლა' :
+            {operatorStatus === 'active' ? 'პაუზა' :
              'გააქტიურება' // Only two options needed
             }
           </button>
@@ -591,7 +591,7 @@ function OperatorDashboard() {
           {/* Sidebar - Client List */}
           <div className="w-64 bg-white border-r flex-shrink-0">
             <div className="h-full overflow-y-auto p-4">
-              <h2 className="text-lg font-medium text-gray-700 mb-2">მომხმარებლები</h2>
+              <h2 className="text-base font-medium text-gray-700 mb-2">მომხმარებლები</h2>
               {/* Filter out clients with 'closed' roomStatus before mapping */}
               {activeClients.filter(client => client.roomStatus !== 'closed').length > 0 ? (
                 <ul className="space-y-2">
