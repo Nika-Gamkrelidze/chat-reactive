@@ -8,7 +8,8 @@ function ClientLogin() {
   const [name, setName] = useState('');
   const [number, setNumber] = useState('');
   const [police, setPolice] = useState('');
-  const [error, setError] = useState('');
+  const [generalError, setGeneralError] = useState('');
+  const [inputErrors, setInputErrors] = useState({ name: '', police: '', number: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [sessionReceived, setSessionReceived] = useState(false);
   const navigate = useNavigate();
@@ -16,7 +17,8 @@ function ClientLogin() {
   const { login } = useAuth();
   
   const attemptLogin = useCallback(async (loginName, loginNumber, loginPolice) => {
-    setError('');
+    setGeneralError('');
+    setInputErrors({ name: '', police: '', number: '' });
     setIsLoading(true);
     setSessionReceived(false);
     
@@ -42,7 +44,7 @@ function ClientLogin() {
           setSessionReceived(true);
         } else {
           console.error('Session received but client data is missing or invalid.');
-          setError('Login failed: Invalid session data received.');
+          setGeneralError('Login failed: Invalid session data received.');
           setIsLoading(false);
           sessionStorage.removeItem('clientId');
           sessionStorage.removeItem('clientName');
@@ -57,7 +59,7 @@ function ClientLogin() {
       
     } catch (err) {
       console.error('Login error during client attemptLogin:', err);
-      setError('Failed to connect. Please try again.');
+      setGeneralError('Failed to connect. Please try again.');
       setIsLoading(false);
     }
   }, [login]);
@@ -109,6 +111,31 @@ function ClientLogin() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setGeneralError('');
+    
+    let currentInputErrors = { name: '', police: '', number: '' };
+    let hasErrors = false;
+
+    if (name.trim().length < 2) {
+      currentInputErrors.name = 'სახელი უნდა შეიცავდეს მინიმუმ 2 სიმბოლოს.';
+      hasErrors = true;
+    }
+    if (police.trim().length < 5) {
+      currentInputErrors.police = 'პოლისის ან პირადი ნომერი უნდა შეიცავდეს მინიმუმ 5 სიმბოლოს.';
+      hasErrors = true;
+    }
+    const phoneRegex = /^5\d{8}$/;
+    if (!phoneRegex.test(number)) {
+      currentInputErrors.number = 'ტელეფონის ნომერი უნდა იწყებოდეს 5-ით და შეიცავდეს 9 ციფრს.';
+      hasErrors = true;
+    }
+
+    setInputErrors(currentInputErrors);
+
+    if (hasErrors) {
+      return;
+    }
+
     if (!isLoading) {
       attemptLogin(name, number, police);
     }
@@ -130,68 +157,89 @@ function ClientLogin() {
         </div>
 
         <div className="flex-grow flex flex-col justify-center">
-          {error && (
+          {generalError && (
             <div className="bg-red-100 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-3 text-sm">
-              {error === 'Failed to connect. Please try again.' ? 
+              {generalError === 'Failed to connect. Please try again.' ? 
                 'კავშირი ვერ მოხერხდა. გთხოვთ სცადოთ ხელახლა.' : 
-               (error === 'Login failed: Invalid session data received.' ?
-                'ავტორიზაცია ვერ მოხერხდა: მიღებულია არასწორი სესიის მონაცემები.' : error)
+               (generalError === 'Login failed: Invalid session data received.' ?
+                'ავტორიზაცია ვერ მოხერხდა: მიღებულია არასწორი სესიის მონაცემები.' : generalError)
               }
             </div>
           )}
           
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FaUser className="text-gray-400" />
+          <form onSubmit={handleSubmit} className="space-y-3" noValidate>
+            <div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FaUser className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  id="name"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setInputErrors(prev => ({ ...prev, name: '' }));
+                  }}
+                  className={`w-full pl-10 pr-3 py-2 border ${inputErrors.name ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-1 ${inputErrors.name ? 'focus:ring-red-500 focus:border-red-500' : 'focus:ring-primary-400 focus:border-primary-400'} transition-all outline-none text-sm`}
+                  placeholder="სახელი"
+                  disabled={isLoading}
+                  aria-invalid={!!inputErrors.name}
+                  aria-describedby="name-error"
+                />
               </div>
-              <input
-                type="text"
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-primary-400 focus:border-primary-400 transition-all outline-none text-sm"
-                placeholder="სახელი"
-                required
-                disabled={isLoading}
-              />
+              {inputErrors.name && <p id="name-error" className="text-red-500 text-xs mt-1 ml-1">{inputErrors.name}</p>}
             </div>
             
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FaShieldAlt className="text-gray-400" />
+            <div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FaShieldAlt className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  id="police"
+                  value={police}
+                  onChange={(e) => {
+                    setPolice(e.target.value);
+                    setInputErrors(prev => ({ ...prev, police: '' }));
+                  }}
+                  className={`w-full pl-10 pr-3 py-2 border ${inputErrors.police ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-1 ${inputErrors.police ? 'focus:ring-red-500 focus:border-red-500' : 'focus:ring-primary-400 focus:border-primary-400'} transition-all outline-none text-sm`}
+                  placeholder="პოლისის ან პირადი ნომერი"
+                  disabled={isLoading}
+                  aria-invalid={!!inputErrors.police}
+                  aria-describedby="police-error"
+                />
               </div>
-              <input
-                type="text"
-                id="police"
-                value={police}
-                onChange={(e) => setPolice(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-primary-400 focus:border-primary-400 transition-all outline-none text-sm"
-                placeholder="პოლისის ან პირადი ნომერი"
-                required
-                disabled={isLoading}
-              />
+              {inputErrors.police && <p id="police-error" className="text-red-500 text-xs mt-1 ml-1">{inputErrors.police}</p>}
             </div>
             
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FaPhone className="text-gray-400" />
+            <div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FaPhone className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  id="number"
+                  value={number}
+                  onChange={(e) => {
+                    setNumber(e.target.value);
+                    setInputErrors(prev => ({ ...prev, number: '' }));
+                  }}
+                  className={`w-full pl-10 pr-3 py-2 border ${inputErrors.number ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-1 ${inputErrors.number ? 'focus:ring-red-500 focus:border-red-500' : 'focus:ring-primary-400 focus:border-primary-400'} transition-all outline-none text-sm`}
+                  placeholder="ტელეფონის ნომერი"
+                  disabled={isLoading}
+                  aria-invalid={!!inputErrors.number}
+                  aria-describedby="number-error"
+                />
               </div>
-              <input
-                type="text"
-                id="number"
-                value={number}
-                onChange={(e) => setNumber(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-primary-400 focus:border-primary-400 transition-all outline-none text-sm"
-                placeholder="ტელეფონის ნომერი"
-                required
-                disabled={isLoading}
-              />
+              {inputErrors.number && <p id="number-error" className="text-red-500 text-xs mt-1 ml-1">{inputErrors.number}</p>}
             </div>
             
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm text-sm"
+              className="w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm text-sm pt-5"
               disabled={isLoading}
             >
               {isLoading ? 'დაკავშირება...' : 'ჩატის დაწყება'}
