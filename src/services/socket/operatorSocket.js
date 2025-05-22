@@ -734,6 +734,7 @@ export const sendMessageToClient = (clientId, text, roomId) => {
   }
   
   const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+  const operatorName = sessionStorage.getItem('operatorName');
   
   if (!operatorId) {
     console.error('Cannot send message: operator ID not available');
@@ -754,7 +755,8 @@ export const sendMessageToClient = (clientId, text, roomId) => {
     text,
     roomId,
     senderId: operatorId,
-    receiverId: clientId
+    receiverId: clientId,
+    senderName: operatorName
   };
   
   // Just emit the message to server - no temporary message creation

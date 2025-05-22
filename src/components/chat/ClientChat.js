@@ -493,6 +493,9 @@ function ClientChat() {
                     : 'bg-white border border-gray-200 text-gray-800'
                 }`}
               >
+                {msg.sender === 'operator' && msg.senderName && (
+                  <p className="text-xs font-medium mb-1 text-gray-600">{msg.senderName}</p>
+                )}
                 <p className="text-xs break-words">{msg.text}</p>
                 <p className={`text-[10px] mt-0.5 ${
                   msg.sender === 'client' ? 'text-primary-100' : 'text-gray-400'

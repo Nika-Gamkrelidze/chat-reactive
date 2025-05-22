@@ -427,6 +427,7 @@ export const sendClientMessage = (text, roomId) => {
   }
   
   const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
+  const clientName = sessionStorage.getItem('clientName');
   
   if (!clientId) {
     console.error('Cannot send message: client ID not available');
@@ -441,7 +442,8 @@ export const sendClientMessage = (text, roomId) => {
   const messageData = {
     text,
     roomId,
-    senderId: clientId
+    senderId: clientId,
+    senderName: clientName
   };
   
   // Just emit the message to server - no temporary message creation
