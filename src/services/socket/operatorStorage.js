@@ -23,9 +23,17 @@ class OperatorStorage {
       }
       
       // Also load from individual session storage items
-      this.operatorId = this.operatorId || sessionStorage.getItem('operatorId');
-      this.operatorName = this.operatorName || sessionStorage.getItem('operatorName');
-      this.operatorNumber = this.operatorNumber || sessionStorage.getItem('operatorNumber');
+      const storedOperatorId = sessionStorage.getItem('operatorId');
+      const storedOperatorName = sessionStorage.getItem('operatorName');
+      const storedOperatorNumber = sessionStorage.getItem('operatorNumber');
+      
+      // Only use stored values if they're valid (not 'null' or 'undefined' strings)
+      this.operatorId = this.operatorId || 
+        ((storedOperatorId && storedOperatorId !== 'null' && storedOperatorId !== 'undefined') ? storedOperatorId : null);
+      this.operatorName = this.operatorName || 
+        ((storedOperatorName && storedOperatorName !== 'null' && storedOperatorName !== 'undefined') ? storedOperatorName : null);
+      this.operatorNumber = this.operatorNumber || 
+        ((storedOperatorNumber && storedOperatorNumber !== 'null' && storedOperatorNumber !== 'undefined') ? storedOperatorNumber : null);
     } catch (error) {
       console.error('Error loading operator data from storage:', error);
     }
@@ -44,7 +52,7 @@ class OperatorStorage {
       
       sessionStorage.setItem('operatorData', JSON.stringify(dataToStore));
       
-      // Also save individual items for backward compatibility
+      // Also save individual items for backward compatibility, but only if they're not null
       if (this.operatorId) sessionStorage.setItem('operatorId', this.operatorId);
       if (this.operatorName) sessionStorage.setItem('operatorName', this.operatorName);
       if (this.operatorNumber) sessionStorage.setItem('operatorNumber', this.operatorNumber);

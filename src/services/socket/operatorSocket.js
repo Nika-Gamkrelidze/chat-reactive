@@ -65,7 +65,10 @@ export const operatorStorage = {
   saveToStorage: function() {
     try {
       sessionStorage.setItem('operatorData', JSON.stringify(this.operator));
-      sessionStorage.setItem('operatorId', this.operatorId);
+      // Only save operatorId if it's not null
+      if (this.operatorId) {
+        sessionStorage.setItem('operatorId', this.operatorId);
+      }
       sessionStorage.setItem('activeClients', JSON.stringify(this.activeClients));
       sessionStorage.setItem('pendingClients', JSON.stringify(this.pendingClients));
       sessionStorage.setItem('operatorMessages', JSON.stringify(this.messages));
@@ -78,13 +81,16 @@ export const operatorStorage = {
   loadFromStorage: function() {
     try {
       const operatorData = sessionStorage.getItem('operatorData');
-      const operatorId = sessionStorage.getItem('operatorId');
+      const storedOperatorId = sessionStorage.getItem('operatorId');
       const activeClients = sessionStorage.getItem('activeClients');
       const pendingClients = sessionStorage.getItem('pendingClients');
       const messages = sessionStorage.getItem('operatorMessages');
       
       if (operatorData) this.operator = JSON.parse(operatorData);
-      if (operatorId) this.operatorId = operatorId;
+      // Only set operatorId if it's a valid value (not null, 'null', or 'undefined')
+      if (storedOperatorId && storedOperatorId !== 'null' && storedOperatorId !== 'undefined') {
+        this.operatorId = storedOperatorId;
+      }
       if (activeClients) this.activeClients = JSON.parse(activeClients);
       if (pendingClients) this.pendingClients = JSON.parse(pendingClients);
       if (messages) this.messages = JSON.parse(messages);
@@ -598,13 +604,25 @@ export const initOperatorSocket = (name, number, operatorId = null) => {
 
 // Reconnect with stored credentials
 export const reconnectOperatorSocket = () => {
+  // Clean up any corrupted operatorId data first
+  const storedOperatorId = sessionStorage.getItem('operatorId');
+  if (storedOperatorId === 'null' || storedOperatorId === 'undefined') {
+    console.log('Cleaning up corrupted operatorId from sessionStorage');
+    sessionStorage.removeItem('operatorId');
+  }
+  
   // Load any existing data from storage
   operatorStorage.loadFromStorage();
   
   // Get stored credentials
-  const operatorId = sessionStorage.getItem('operatorId');
+  const cleanOperatorId = sessionStorage.getItem('operatorId');
   const name = sessionStorage.getItem('operatorName');
   const number = sessionStorage.getItem('operatorNumber');
+  
+  // Convert string 'null' to actual null, and handle empty strings
+  const operatorId = (cleanOperatorId && cleanOperatorId !== 'null' && cleanOperatorId !== 'undefined') 
+    ? cleanOperatorId 
+    : null;
   
   console.log('Attempting to reconnect with stored operator credentials:', { operatorId, name, number });
   
@@ -622,7 +640,7 @@ export const reconnectOperatorSocket = () => {
     socket.auth = {
       name: name,
       number: number,
-      userId: operatorId, // Include operatorId if available
+      userId: operatorId, // Will be null if not properly stored
       type: "operator"
     };
     
@@ -733,7 +751,11 @@ export const sendMessageToClient = (clientId, text, roomId) => {
     return false;
   }
   
-  const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+  const storedOperatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+  // Convert string 'null' to actual null
+  const operatorId = (storedOperatorId && storedOperatorId !== 'null' && storedOperatorId !== 'undefined') 
+    ? storedOperatorId 
+    : null;
   const operatorName = sessionStorage.getItem('operatorName');
   
   if (!operatorId) {
@@ -775,7 +797,12 @@ export const acceptClient = (clientId) => {
 // Send typing indicator event to the server
 export const sendOperatorTypingEvent = (roomId, isTyping) => {
   if (socket && socket.connected) {
-    const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+    const storedOperatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+    // Convert string 'null' to actual null
+    const operatorId = (storedOperatorId && storedOperatorId !== 'null' && storedOperatorId !== 'undefined') 
+      ? storedOperatorId 
+      : null;
+      
     if (!operatorId) {
         console.error("Cannot send typing event: operatorId missing.");
         return;
