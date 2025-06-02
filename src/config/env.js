@@ -17,7 +17,7 @@ const config = {
   
   // Application settings
   app: {
-    name: 'Chat Application',
+    name: 'CQ Chat Application',
     version: '1.0.0',
     debug: true
   }

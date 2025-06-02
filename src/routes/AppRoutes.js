@@ -9,7 +9,7 @@ import OperatorDashboard from '../components/chat/OperatorDashboard';
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/client/login" replace />} />
+      <Route path="/" element={<Navigate to="/operator/login" replace />} />
 
       <Route path="/client/login" element={<ClientLogin />} />
       <Route 
