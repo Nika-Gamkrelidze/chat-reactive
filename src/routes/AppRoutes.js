@@ -20,15 +20,15 @@ function AppRoutes() {
           </PrivateRoute>
         } 
       />
-      {/* <Route path="/operator/login" element={<OperatorLogin />} /> */}
-      {/* <Route 
+      <Route path="/operator/login" element={<OperatorLogin />} />
+      <Route 
         path="/operator/dashboard" 
         element={
           <PrivateRoute type="operator">
             <OperatorDashboard />
           </PrivateRoute>
         } 
-      /> */}
+      />
     </Routes>
   );
 }
