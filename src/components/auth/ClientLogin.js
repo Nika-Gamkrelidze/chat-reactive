@@ -7,18 +7,17 @@ import { FaUser, FaShieldAlt, FaPhone, FaRegCommentDots } from 'react-icons/fa';
 function ClientLogin() {
   const [name, setName] = useState('');
   const [number, setNumber] = useState('');
-  const [police, setPolice] = useState('');
   const [generalError, setGeneralError] = useState('');
-  const [inputErrors, setInputErrors] = useState({ name: '', police: '', number: '' });
+  const [inputErrors, setInputErrors] = useState({ name: '', number: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [sessionReceived, setSessionReceived] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
   
-  const attemptLogin = useCallback(async (loginName, loginNumber, loginPolice) => {
+  const attemptLogin = useCallback(async (loginName, loginNumber) => {
     setGeneralError('');
-    setInputErrors({ name: '', police: '', number: '' });
+    setInputErrors({ name: '', number: '' });
     setIsLoading(true);
     setSessionReceived(false);
     
@@ -30,13 +29,13 @@ function ClientLogin() {
           sessionStorage.setItem('clientId', sessionData.client.id);
           sessionStorage.setItem('clientName', loginName);
           sessionStorage.setItem('clientNumber', loginNumber);
-          sessionStorage.setItem('clientPolice', loginPolice);
+          sessionStorage.setItem('clientPolice', '');
           
           login({
             id: sessionData.client.id,
             name: loginName,
             number: loginNumber,
-            police: loginPolice,
+            police: '',
             role: 'client'
           });
           
@@ -54,8 +53,8 @@ function ClientLogin() {
         }
       });
       
-      console.log(`Attempting to login client with name: ${loginName}, number: ${loginNumber}, police: ${loginPolice}`);
-      initClientSocket(loginName, loginNumber, loginPolice);
+      console.log(`Attempting to login client with name: ${loginName}, number: ${loginNumber}, police: ''`);
+      initClientSocket(loginName, loginNumber, '');
       
     } catch (err) {
       console.error('Login error during client attemptLogin:', err);
@@ -67,10 +66,9 @@ function ClientLogin() {
   useEffect(() => {
     const storedClientName = sessionStorage.getItem('clientName');
     const storedClientNumber = sessionStorage.getItem('clientNumber');
-    const storedClientPolice = sessionStorage.getItem('clientPolice');
     const storedUser = sessionStorage.getItem('user');
     
-    if (storedClientName && storedClientNumber && storedClientPolice && storedUser) {
+    if (storedClientName && storedClientNumber && storedUser) {
       try {
         const user = JSON.parse(storedUser);
         if (user && user.role === 'client') {
@@ -91,14 +89,12 @@ function ClientLogin() {
     const queryParams = new URLSearchParams(location.search);
     const nameFromUrl = queryParams.get('name');
     const numberFromUrl = queryParams.get('number');
-    const policeFromUrl = queryParams.get('police');
 
-    if (nameFromUrl && numberFromUrl && policeFromUrl && !isLoading) {
-      console.log('Found client name, number, and police in URL, attempting auto-login.');
+    if (nameFromUrl && numberFromUrl && !isLoading) {
+      console.log('Found client name and number in URL, attempting auto-login.');
       setName(nameFromUrl);
       setNumber(numberFromUrl);
-      setPolice(policeFromUrl);
-      attemptLogin(nameFromUrl, numberFromUrl, policeFromUrl);
+      attemptLogin(nameFromUrl, numberFromUrl);
     }
   }, [navigate, location.search, isLoading, attemptLogin]);
   
@@ -113,15 +109,11 @@ function ClientLogin() {
     e.preventDefault();
     setGeneralError('');
     
-    let currentInputErrors = { name: '', police: '', number: '' };
+    let currentInputErrors = { name: '', number: '' };
     let hasErrors = false;
 
     if (name.trim().length < 2) {
       currentInputErrors.name = 'სახელი უნდა შეიცავდეს მინიმუმ 2 სიმბოლოს.';
-      hasErrors = true;
-    }
-    if (police.trim().length < 5) {
-      currentInputErrors.police = 'პოლისის ან პირადი ნომერი უნდა შეიცავდეს მინიმუმ 5 სიმბოლოს.';
       hasErrors = true;
     }
     const phoneRegex = /^5\d{8}$/;
@@ -137,7 +129,7 @@ function ClientLogin() {
     }
 
     if (!isLoading) {
-      attemptLogin(name, number, police);
+      attemptLogin(name, number);
     }
   };
 
@@ -189,29 +181,6 @@ function ClientLogin() {
                 />
               </div>
               {inputErrors.name && <p id="name-error" className="text-red-500 text-xs mt-1 ml-1">{inputErrors.name}</p>}
-            </div>
-            
-            <div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaShieldAlt className="text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  id="police"
-                  value={police}
-                  onChange={(e) => {
-                    setPolice(e.target.value);
-                    setInputErrors(prev => ({ ...prev, police: '' }));
-                  }}
-                  className={`w-full pl-10 pr-3 py-2 border ${inputErrors.police ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-1 ${inputErrors.police ? 'focus:ring-red-500 focus:border-red-500' : 'focus:ring-primary-400 focus:border-primary-400'} transition-all outline-none text-sm`}
-                  placeholder="პოლისის ან პირადი ნომერი"
-                  disabled={isLoading}
-                  aria-invalid={!!inputErrors.police}
-                  aria-describedby="police-error"
-                />
-              </div>
-              {inputErrors.police && <p id="police-error" className="text-red-500 text-xs mt-1 ml-1">{inputErrors.police}</p>}
             </div>
             
             <div>
