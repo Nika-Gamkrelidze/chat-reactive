@@ -6,7 +6,7 @@ const config = {
     // host: '192.168.14.56',
     host: 'chat.communiq.ge',
     port: '', // Empty string for default port
-    namespace: 'namespace1',
+    namespace: 'GPI',
     get url() {
       return `${this.protocol}://${this.host}${this.port ? ':' + this.port : ''}`;
     },
