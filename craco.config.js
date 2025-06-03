@@ -1,20 +1,20 @@
 module.exports = {
   webpack: {
     configure: (webpackConfig) => {
-      // Customize the output filenames
-      webpackConfig.output.filename = 'static/js/cq-chat-main.js';
-      webpackConfig.output.chunkFilename = 'static/js/cq-chat-main.chunk.js';
+      // Remove hash from JS files
+      webpackConfig.output.filename = 'static/js/main.js';
+      webpackConfig.output.chunkFilename = 'static/js/[name].js';
 
-      // Find the CSS plugin and modify its options
-      const cssPlugin = webpackConfig.plugins.find(
-        (plugin) => plugin.constructor.name === 'MiniCssExtractPlugin'
+      // Remove hash from CSS files
+      const miniCssExtractPlugin = webpackConfig.plugins.find(
+        plugin => plugin.constructor.name === 'MiniCssExtractPlugin'
       );
-      if (cssPlugin) {
-        cssPlugin.options.filename = 'static/css/cq-chat-main.css';
-        cssPlugin.options.chunkFilename = 'static/css/cq-chat-main.chunk.css';
+      if (miniCssExtractPlugin) {
+        miniCssExtractPlugin.options.filename = 'static/css/main.css';
+        miniCssExtractPlugin.options.chunkFilename = 'static/css/[name].css';
       }
 
       return webpackConfig;
     },
   },
-}; 
+};
