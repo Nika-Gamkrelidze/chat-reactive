@@ -5,6 +5,7 @@
     "homepage": "https://chat-reactive.vercel.app",
     "proxy": "",
     "dependencies": {
+        "@heroicons/react": "^2.2.0",
         "@socket.io/admin-ui": "^0.5.1",
         "@tailwindcss/cli": "^4.0.14",
         "@testing-library/dom": "^10.4.0",

@@ -20,6 +20,7 @@ import {
   setTypingHandler
 } from '../../services/socket/operatorSocket';
 import ClientInfoSidebar from './ClientInfoSidebar';
+import { FaPause, FaPlay, FaTimes, FaSignOutAlt } from 'react-icons/fa';
 
 function OperatorDashboard() {
   const navigate = useNavigate();
@@ -517,8 +518,8 @@ function OperatorDashboard() {
       {/* Header */}
       <header className="bg-white shadow-sm p-4 flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-semibold text-gray-800">ოპერატორის პანელი</h1>
-          <div className="text-sm text-gray-500">
+          <h1 className="text-sm font-semibold text-gray-800">ოპერატორის პანელი</h1>
+          <div className="text-xs text-gray-500">
             {isConnected ? (
               <span className={`flex items-center ${
                 operatorStatus === 'active' ? 'text-green-500' :
@@ -545,35 +546,47 @@ function OperatorDashboard() {
             )}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={handleStatusToggle}
-            className={`px-4 py-2 rounded text-white ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-white text-xs ${
               operatorStatus === 'active' ? 'bg-yellow-500 hover:bg-yellow-600' :
-              'bg-green-500 hover:bg-green-600' // Only active/paused states
+              'bg-green-500 hover:bg-green-600'
             }`}
-            disabled={!isConnected} // Disable if not connected
+            disabled={!isConnected}
           >
-            {operatorStatus === 'active' ? 'პაუზა' :
-             'გააქტიურება' // Only two options needed
-            }
+            {operatorStatus === 'active' ? (
+              <>
+                <FaPause className="w-3 h-3" />
+                პაუზა 
+              </>
+            ) : (
+              <>
+                <FaPlay className="w-3 h-3" />
+                გააქტიურება
+              </>
+            )}
           </button>
           <button
             onClick={handleEndChat}
-            className={`px-4 py-2 rounded text-white ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-white text-xs ${
               !selectedClient || selectedClient.roomStatus === 'closed' || !isConnected
                 ? 'bg-gray-400 cursor-not-allowed' 
                 : 'bg-gray-500 hover:bg-gray-600'
             }`}
             disabled={!selectedClient || selectedClient.roomStatus === 'closed' || !isConnected}
           >
-            ჩათის დასრულება
+            <FaTimes className="w-3 h-3" />
+
+            <p className="flex items-center gap-1">
+            ჩათის დასრულება</p>
           </button>
           <button
             onClick={handleLogout}
-            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            className="flex items-center gap-2 px-3 py-1.5 bg-red-500 text-white text-xs rounded hover:bg-red-600"
           >
-            გასვლა
+            <FaSignOutAlt className="w-3 h-3" />
+            <p>გასვლა</p>
           </button>
         </div>
       </header>
@@ -591,7 +604,7 @@ function OperatorDashboard() {
           {/* Sidebar - Client List */}
           <div className="w-64 bg-white border-r flex-shrink-0">
             <div className="h-full overflow-y-auto p-4">
-              <h2 className="text-base font-medium text-gray-700 mb-2">მომხმარებლები</h2>
+              <h2 className="text-sm font-medium text-gray-700 mb-2">მომხმარებლები</h2>
               {/* Filter out clients with 'closed' roomStatus before mapping */}
               {activeClients.filter(client => client.roomStatus !== 'closed').length > 0 ? (
                 <ul className="space-y-2">
@@ -609,8 +622,8 @@ function OperatorDashboard() {
                     >
                       {/* Client Info */}
                       <div>
-                        <div className="font-medium">{client.name}</div>
-                        <div className="text-sm text-gray-500">{client.number}</div>
+                        <div className="font-medium text-xs">{client.name}</div>
+                        <div className="text-xs text-gray-500">{client.number}</div>
                       </div>
                       {/* Status and Unread Count */}
                       <div className="flex items-center space-x-2"> 
@@ -622,7 +635,7 @@ function OperatorDashboard() {
                         )}
                         {/* Status Indicator */}
                         <div className="flex items-center">
-                          <span className="text-xs text-gray-500 mr-1"> {/* Reduced margin */}
+                          <span className="text-xs text-gray-500 mr-1"> {/* Already text-xs */}
                             {client.roomStatus === 'active' ? 'აქტიური' : 'დასრულებული'}
                           </span>
                           <span className={`w-2 h-2 rounded-full ${
@@ -638,7 +651,7 @@ function OperatorDashboard() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-gray-500 text-sm">აქტიური მომხმარებლები ვერ მოიძებნა</p>
+                <p className="text-gray-500 text-xs">აქტიური მომხმარებლები ვერ მოიძებნა</p>
               )}
             </div>
           </div>
@@ -660,7 +673,7 @@ function OperatorDashboard() {
                           message.sentByOperator ? 'justify-end' : 'justify-start'
                         }`}
                       >
-                        <span className={`px-4 py-2 rounded-lg max-w-xs ${
+                        <span className={`px-3 py-1.5 rounded-lg max-w-xs text-xs ${
                           message.sentByOperator 
                             ? 'bg-blue-500 text-white' 
                             : 'bg-gray-200 text-gray-800'
@@ -676,14 +689,14 @@ function OperatorDashboard() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-center text-gray-500 mt-4">
+                    <div className="text-center text-gray-500 mt-4 text-xs">
                       შეტყობინებები არ არის
                     </div>
                   )}
                   {/* Client Typing Indicator */}
                   {selectedClient && clientTypingStatus[selectedClient.id] && (
                     <div className="flex justify-start mb-4">
-                      <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-xs">
+                      <div className="bg-gray-200 text-gray-800 rounded-lg px-3 py-1.5 max-w-xs">
                         <div className="flex items-center space-x-1">
                           <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
                           <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100"></div>
@@ -703,12 +716,12 @@ function OperatorDashboard() {
                       value={inputMessage}
                       onChange={handleInputChange}
                       placeholder={selectedClient.roomStatus === 'closed' ? "ჩათი დასრულებულია" : "შეიყვანეთ შეტყობინება..."}
-                      className="flex-1 p-2 border rounded-l-lg"
+                      className="flex-1 p-2 border rounded-l-lg text-xs"
                       disabled={!isConnected || selectedClient.roomStatus === 'closed'}
                     />
                     <button 
                       type="submit" 
-                      className={`px-6 py-2 rounded-r-lg ${
+                      className={`px-4 py-2 rounded-r-lg text-xs ${
                         isConnected && selectedClient.roomStatus !== 'closed'
                           ? 'bg-blue-500 text-white hover:bg-blue-600' 
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -721,7 +734,7 @@ function OperatorDashboard() {
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-500">
+              <div className="flex-1 flex items-center justify-center text-gray-500 text-xs">
                 აირჩიეთ მომხმარებელი ჩათის დასაწყებად
               </div>
             )}
