@@ -190,9 +190,10 @@ function ClientChat() {
       
       // Load messages if available and process them
       if (sessionData.messages && Array.isArray(sessionData.messages)) {
+        const currentClientId = sessionStorage.getItem('clientId');
         const processedMessages = sessionData.messages.map(msg => ({
           ...msg,
-          sender: msg.sentByOperator ? 'operator' : 'client'
+          sender: msg.senderId === currentClientId ? 'client' : 'operator'
         }));
         
         setMessages(processedMessages);
@@ -246,9 +247,10 @@ function ClientChat() {
     // Load existing messages from storage and process them
     const storedMessages = clientStorage.messages || [];
     if (storedMessages.length > 0) {
+      const currentClientId = sessionStorage.getItem('clientId');
       const processedMessages = storedMessages.map(msg => ({
         ...msg,
-        sender: msg.sentByOperator ? 'operator' : 'client'
+        sender: msg.senderId === currentClientId ? 'client' : 'operator'
       }));
       
       setMessages(processedMessages);
