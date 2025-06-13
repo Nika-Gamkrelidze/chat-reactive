@@ -20,6 +20,7 @@ import { BiExit } from 'react-icons/bi';
 import { RiCloseLine } from 'react-icons/ri';
 import { FiPhoneOff } from 'react-icons/fi';
 import { IoSend } from 'react-icons/io5';
+import ChatbotInterface from './ChatbotInterface';
 
 function ClientChat() {
   const [messages, setMessages] = useState([]);
@@ -29,6 +30,7 @@ function ClientChat() {
   const [operatorTyping, setOperatorTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showChatbot, setShowChatbot] = useState(true);
   const messagesEndRef = useRef(null);
   const clientTypingTimeoutRef = useRef(null);
   const operatorTypingTimeoutRef = useRef(null);
@@ -426,6 +428,11 @@ function ClientChat() {
     navigate('/client/login');
   };
   
+  const handleConnectToOperator = () => {
+    setShowChatbot(false);
+    setIsLoading(false);
+  };
+  
   // Log operatorTyping state during render
   console.log('[ClientChat] Rendering - operatorTyping:', operatorTyping);
   
@@ -436,6 +443,21 @@ function ClientChat() {
           <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <h2 className="text-xl font-semibold text-gray-800">კავშირის დამყარება...</h2>
           <p className="text-gray-500 mt-2">გთხოვთ დაელოდოთ კავშირის დამყარებას</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (showChatbot) {
+    return (
+      <div className="h-full w-full flex flex-col">
+        <div className="w-full max-w-md mx-auto bg-white rounded-lg shadow-xl overflow-hidden flex flex-col h-full">
+          <ChatbotInterface
+            onConnectToOperator={handleConnectToOperator}
+            clientName={clientName}
+            clientNumber={clientNumber}
+            clientPolice={clientPolice}
+          />
         </div>
       </div>
     );
