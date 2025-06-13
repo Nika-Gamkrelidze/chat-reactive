@@ -2,67 +2,40 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext();
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Check for existing user on mount
-  useEffect(() => {
-    // Check if we have user data in session storage
-    const checkExistingAuth = () => {
-      const storedUser = sessionStorage.getItem('user');
-      
-      if (storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          setIsAuthenticated(true);
-        } catch (error) {
-          console.error('Error parsing stored user:', error);
-          sessionStorage.removeItem('user');
-        }
-      }
-      
-      setIsLoading(false);
-    };
-    
-    checkExistingAuth();
-  }, []);
-  
-  // Login function
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(() => {
+    const storedUser = localStorage.getItem('user');
+    return storedUser ? JSON.parse(storedUser) : null;
+  });
+
+  const [loading, setLoading] = useState(false);
+
   const login = (userData) => {
+    console.log('User logged in:', userData);
     setUser(userData);
-    setIsAuthenticated(true);
-    sessionStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem('user', JSON.stringify(userData));
   };
-  
-  // Logout function
+
   const logout = () => {
     setUser(null);
-    setIsAuthenticated(false);
-    sessionStorage.removeItem('user');
+    localStorage.removeItem('user');
     
-    // Clear operator/client specific data
-    if (sessionStorage.getItem('operatorName')) {
-      // Use the clearAll method from operatorStorage
+    // Clear operator data if exists
+    if (localStorage.getItem('operatorName')) {
       const { clearOperatorData } = require('../services/socket/operatorSocket');
       clearOperatorData();
     }
-    
-    if (sessionStorage.getItem('clientName')) {
-      sessionStorage.removeItem('clientName');
-      sessionStorage.removeItem('clientNumber');
-      sessionStorage.removeItem('clientId');
-      sessionStorage.removeItem('clientActiveOperator');
-      sessionStorage.removeItem('clientMessages');
+
+    // Clear client data if exists  
+    if (localStorage.getItem('clientName')) {
+      localStorage.removeItem('clientName');
     }
   };
   
   const value = {
     user,
-    isAuthenticated,
-    isLoading,
+    isAuthenticated: !!user,
+    isLoading: loading,
     login,
     logout
   };

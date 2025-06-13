@@ -29,7 +29,7 @@ export const operatorStorage = {
       this.operatorId = sessionData.operatorId;
     }
     
-    // Save to sessionStorage for persistence
+    // Save to localStorage for persistence
     this.saveToStorage();
     
     return this;
@@ -61,30 +61,30 @@ export const operatorStorage = {
     return false;
   },
   
-  // Save data to sessionStorage
+  // Save data to localStorage
   saveToStorage: function() {
     try {
-      sessionStorage.setItem('operatorData', JSON.stringify(this.operator));
+      localStorage.setItem('operatorData', JSON.stringify(this.operator));
       // Only save operatorId if it's not null
       if (this.operatorId) {
-        sessionStorage.setItem('operatorId', this.operatorId);
+        localStorage.setItem('operatorId', this.operatorId);
       }
-      sessionStorage.setItem('activeClients', JSON.stringify(this.activeClients));
-      sessionStorage.setItem('pendingClients', JSON.stringify(this.pendingClients));
-      sessionStorage.setItem('operatorMessages', JSON.stringify(this.messages));
+      localStorage.setItem('activeClients', JSON.stringify(this.activeClients));
+      localStorage.setItem('pendingClients', JSON.stringify(this.pendingClients));
+      localStorage.setItem('operatorMessages', JSON.stringify(this.messages));
     } catch (e) {
-      console.error('Error saving to sessionStorage:', e);
+      console.error('Error saving to localStorage:', e);
     }
   },
   
-  // Load data from sessionStorage
+  // Load data from localStorage
   loadFromStorage: function() {
     try {
-      const operatorData = sessionStorage.getItem('operatorData');
-      const storedOperatorId = sessionStorage.getItem('operatorId');
-      const activeClients = sessionStorage.getItem('activeClients');
-      const pendingClients = sessionStorage.getItem('pendingClients');
-      const messages = sessionStorage.getItem('operatorMessages');
+      const operatorData = localStorage.getItem('operatorData');
+      const storedOperatorId = localStorage.getItem('operatorId');
+      const activeClients = localStorage.getItem('activeClients');
+      const pendingClients = localStorage.getItem('pendingClients');
+      const messages = localStorage.getItem('operatorMessages');
       
       if (operatorData) this.operator = JSON.parse(operatorData);
       // Only set operatorId if it's a valid value (not null, 'null', or 'undefined')
@@ -95,7 +95,7 @@ export const operatorStorage = {
       if (pendingClients) this.pendingClients = JSON.parse(pendingClients);
       if (messages) this.messages = JSON.parse(messages);
     } catch (e) {
-      console.error('Error loading from sessionStorage:', e);
+      console.error('Error loading from localStorage:', e);
     }
     
     return this;
@@ -109,14 +109,14 @@ export const operatorStorage = {
     this.pendingClients = [];
     this.messages = {};
     
-    // Clear sessionStorage
-    sessionStorage.removeItem('operatorData');
-    sessionStorage.removeItem('operatorId');
-    sessionStorage.removeItem('activeClients');
-    sessionStorage.removeItem('pendingClients');
-    sessionStorage.removeItem('operatorMessages');
-    sessionStorage.removeItem('operatorName');
-    sessionStorage.removeItem('operatorNumber');
+    // Clear localStorage
+    localStorage.removeItem('operatorData');
+    localStorage.removeItem('operatorId');
+    localStorage.removeItem('activeClients');
+    localStorage.removeItem('pendingClients');
+    localStorage.removeItem('operatorMessages');
+    localStorage.removeItem('operatorName');
+    localStorage.removeItem('operatorNumber');
   },
   
   // Clear all operator data including login credentials
@@ -124,11 +124,11 @@ export const operatorStorage = {
     this.clear();
     
     try {
-      sessionStorage.removeItem('operatorId');
-      sessionStorage.removeItem('operatorName');
-      sessionStorage.removeItem('operatorNumber');
+      localStorage.removeItem('operatorId');
+      localStorage.removeItem('operatorName');
+      localStorage.removeItem('operatorNumber');
     } catch (error) {
-      console.error('Error clearing all operator data from session storage:', error);
+      console.error('Error clearing all operator data from local storage:', error);
     }
   }
 };
@@ -590,7 +590,7 @@ export const initOperatorSocket = (name, number, operatorId = null) => {
   socket.auth = {
     name: name,
     number: number,
-    userId: operatorId || sessionStorage.getItem('operatorId'),
+    userId: operatorId || localStorage.getItem('operatorId'),
     type: "operator"
   };
   
@@ -605,19 +605,19 @@ export const initOperatorSocket = (name, number, operatorId = null) => {
 // Reconnect with stored credentials
 export const reconnectOperatorSocket = () => {
   // Clean up any corrupted operatorId data first
-  const storedOperatorId = sessionStorage.getItem('operatorId');
+  const storedOperatorId = localStorage.getItem('operatorId');
   if (storedOperatorId === 'null' || storedOperatorId === 'undefined') {
-    console.log('Cleaning up corrupted operatorId from sessionStorage');
-    sessionStorage.removeItem('operatorId');
+    console.log('Cleaning up corrupted operatorId from localStorage');
+    localStorage.removeItem('operatorId');
   }
   
   // Load any existing data from storage
   operatorStorage.loadFromStorage();
   
   // Get stored credentials
-  const cleanOperatorId = sessionStorage.getItem('operatorId');
-  const name = sessionStorage.getItem('operatorName');
-  const number = sessionStorage.getItem('operatorNumber');
+  const cleanOperatorId = localStorage.getItem('operatorId');
+  const name = localStorage.getItem('operatorName');
+  const number = localStorage.getItem('operatorNumber');
   
   // Convert string 'null' to actual null, and handle empty strings
   const operatorId = (cleanOperatorId && cleanOperatorId !== 'null' && cleanOperatorId !== 'undefined') 
@@ -724,6 +724,8 @@ export const setTypingHandler = (handler) => {
 
 export const disconnectOperatorSocket = () => {
   if (socket) socket.disconnect();
+  // socket.emit('disconnect_from_operator');
+
 };
 
 // Request client queue
@@ -751,12 +753,12 @@ export const sendMessageToClient = (clientId, text, roomId) => {
     return false;
   }
   
-  const storedOperatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+  const storedOperatorId = operatorStorage.operatorId || localStorage.getItem('operatorId');
   // Convert string 'null' to actual null
   const operatorId = (storedOperatorId && storedOperatorId !== 'null' && storedOperatorId !== 'undefined') 
     ? storedOperatorId 
     : null;
-  const operatorName = sessionStorage.getItem('operatorName');
+  const operatorName = localStorage.getItem('operatorName');
   
   if (!operatorId) {
     console.error('Cannot send message: operator ID not available');
@@ -797,7 +799,7 @@ export const acceptClient = (clientId) => {
 // Send typing indicator event to the server
 export const sendOperatorTypingEvent = (roomId, isTyping) => {
   if (socket && socket.connected) {
-    const storedOperatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+    const storedOperatorId = operatorStorage.operatorId || localStorage.getItem('operatorId');
     // Convert string 'null' to actual null
     const operatorId = (storedOperatorId && storedOperatorId !== 'null' && storedOperatorId !== 'undefined') 
       ? storedOperatorId 

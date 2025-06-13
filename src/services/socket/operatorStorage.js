@@ -9,10 +9,10 @@ class OperatorStorage {
     this.loadFromStorage();
   }
   
-  // Load data from session storage
+  // Load data from local storage
   loadFromStorage() {
     try {
-      const storedData = sessionStorage.getItem('operatorData');
+      const storedData = localStorage.getItem('operatorData');
       if (storedData) {
         const parsedData = JSON.parse(storedData);
         this.operatorId = parsedData.operatorId || null;
@@ -22,10 +22,10 @@ class OperatorStorage {
         this.clients = parsedData.clients || {};
       }
       
-      // Also load from individual session storage items
-      const storedOperatorId = sessionStorage.getItem('operatorId');
-      const storedOperatorName = sessionStorage.getItem('operatorName');
-      const storedOperatorNumber = sessionStorage.getItem('operatorNumber');
+      // Also load from individual local storage items
+      const storedOperatorId = localStorage.getItem('operatorId');
+      const storedOperatorName = localStorage.getItem('operatorName');
+      const storedOperatorNumber = localStorage.getItem('operatorNumber');
       
       // Only use stored values if they're valid (not 'null' or 'undefined' strings)
       this.operatorId = this.operatorId || 
@@ -39,7 +39,7 @@ class OperatorStorage {
     }
   }
   
-  // Save data to session storage
+  // Save data to local storage
   saveToStorage() {
     try {
       const dataToStore = {
@@ -50,12 +50,12 @@ class OperatorStorage {
         clients: this.clients
       };
       
-      sessionStorage.setItem('operatorData', JSON.stringify(dataToStore));
+      localStorage.setItem('operatorData', JSON.stringify(dataToStore));
       
       // Also save individual items for backward compatibility, but only if they're not null
-      if (this.operatorId) sessionStorage.setItem('operatorId', this.operatorId);
-      if (this.operatorName) sessionStorage.setItem('operatorName', this.operatorName);
-      if (this.operatorNumber) sessionStorage.setItem('operatorNumber', this.operatorNumber);
+      if (this.operatorId) localStorage.setItem('operatorId', this.operatorId);
+      if (this.operatorName) localStorage.setItem('operatorName', this.operatorName);
+      if (this.operatorNumber) localStorage.setItem('operatorNumber', this.operatorNumber);
     } catch (error) {
       console.error('Error saving operator data to storage:', error);
     }
@@ -146,10 +146,10 @@ class OperatorStorage {
     this.operatorNumber = null;
     this.messages = {};
     this.clients = {};
-    sessionStorage.removeItem('operatorData');
-    sessionStorage.removeItem('operatorId');
-    sessionStorage.removeItem('operatorName');
-    sessionStorage.removeItem('operatorNumber');
+    localStorage.removeItem('operatorData');
+    localStorage.removeItem('operatorId');
+    localStorage.removeItem('operatorName');
+    localStorage.removeItem('operatorNumber');
   }
 }
 
