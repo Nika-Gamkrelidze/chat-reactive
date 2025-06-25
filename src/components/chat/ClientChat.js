@@ -45,7 +45,6 @@ function ClientChat() {
   const clientName = sessionStorage.getItem('clientName');
   const clientNumber = sessionStorage.getItem('clientNumber');
   const clientId = sessionStorage.getItem('clientId');
-  const clientPolice = sessionStorage.getItem('clientPolice');
   
   useEffect(() => {
     // Redirect to login if no client info
@@ -210,8 +209,8 @@ function ClientChat() {
     // Check if socket is already connected
     if (!isSocketConnected()) {
       // Only initialize socket if not already connected
-      console.log('Initializing client socket with:', { clientName, clientNumber, clientPolice, clientId });
-      initClientSocket(clientName, clientNumber, clientPolice, clientId);
+      console.log('Initializing client socket with:', { clientName, clientNumber, clientId });
+      initClientSocket(clientName, clientNumber, clientId);
     } else {
       console.log('Using existing socket connection');
       setIsLoading(false);
@@ -290,7 +289,7 @@ function ClientChat() {
         currentSocket.off('connect_error');
       }
     };
-  }, [clientName, clientNumber, clientId, clientPolice, navigate]);
+  }, [clientName, clientNumber, clientId, navigate]);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -456,7 +455,6 @@ function ClientChat() {
             onConnectToOperator={handleConnectToOperator}
             clientName={clientName}
             clientNumber={clientNumber}
-            clientPolice={clientPolice}
           />
         </div>
       </div>

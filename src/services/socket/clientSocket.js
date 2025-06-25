@@ -110,10 +110,9 @@ export const clientStorage = {
   },
   
   // Store user credentials
-  storeUserCredentials: function(name, number, police) {
+  storeUserCredentials: function(name, number) {
     sessionStorage.setItem('clientName', name);
     sessionStorage.setItem('clientNumber', number);
-    sessionStorage.setItem('clientPolice', police);
   },
   
   // Clear all data
@@ -133,7 +132,6 @@ export const clientStorage = {
     sessionStorage.removeItem('messages');
     sessionStorage.removeItem('clientName');
     sessionStorage.removeItem('clientNumber');
-    sessionStorage.removeItem('clientPolice');
     sessionStorage.removeItem('clientId');
   }
 };
@@ -304,8 +302,8 @@ export const isSocketConnected = () => {
   return socket && socket.connected;
 };
 
-// Modify initClientSocket to accept police value and include it in metadata
-export const initClientSocket = (name, number, police, clientId = null) => {
+// Modify initClientSocket to remove police parameter
+export const initClientSocket = (name, number, clientId = null) => {
   // If socket exists and is connected, just return it
   if (isSocketConnected()) {
     console.log('Socket already connected, reusing existing connection');
@@ -320,18 +318,15 @@ export const initClientSocket = (name, number, police, clientId = null) => {
     socket.disconnect();
   }
   
-  // Store user credentials including police
-  clientStorage.storeUserCredentials(name, number, police);
+  // Store user credentials
+  clientStorage.storeUserCredentials(name, number);
   
   // Set authentication data
   socket.auth = {
     name: name,
     number: number,
     userId: clientId || sessionStorage.getItem('clientId'),
-    type: 'client',
-    metadata: {
-      police: police
-    }
+    type: 'client'
   };
   
   console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and userId: ${clientId || 'null'}`);
@@ -351,13 +346,11 @@ export const reconnectClientSocket = () => {
   const clientId = sessionStorage.getItem('clientId');
   const name = sessionStorage.getItem('clientName');
   const number = sessionStorage.getItem('clientNumber');
-  // Get police from storage
-  const police = sessionStorage.getItem('clientPolice');
   
-  console.log('Attempting to reconnect with stored credentials:', { clientId, name, number, police });
+  console.log('Attempting to reconnect with stored credentials:', { clientId, name, number });
   
   // If we have stored credentials, reconnect
-  if (name && number && police) {
+  if (name && number) {
     // Create socket instance if not already created
     if (!socket) {
       createClientSocket();
@@ -368,13 +361,10 @@ export const reconnectClientSocket = () => {
       name: name,
       number: number,
       userId: clientId, // Include clientId if available
-      type: "client",
-      metadata: {
-        police: police
-      }
+      type: "client"
     };
     
-    console.log(`Reconnecting to socket server as client with name: ${name}, number: ${number}, police: ${police}, and userId: ${clientId || 'null'}`);
+    console.log(`Reconnecting to socket server as client with name: ${name}, number: ${number}, and userId: ${clientId || 'null'}`);
     
     // Connect to the server
     if (!socket.connected) {
