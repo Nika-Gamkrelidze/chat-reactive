@@ -420,6 +420,100 @@ export const createOperatorSocket = () => {
       }
     });
     
+    // Handle client reconnection
+    socket.on('client_reconnected', (data) => {
+      console.log('Client reconnected:', data);
+      console.log('DEBUG: Checking metadata in client_reconnected data:', data?.client?.metadata);
+      
+      if (data && data.client && data.roomId && data.client.id) {
+        // Initialize clients object if needed
+        if (!operatorStorage.clients) {
+          operatorStorage.clients = {};
+        }
+
+        const clientId = data.client.id;
+        const currentRoomStatus = 'active'; // Reconnected clients are active
+
+        // Add or update client in clients storage
+        operatorStorage.clients[clientId] = {
+          ...data.client,
+          roomId: data.roomId,
+          roomStatus: currentRoomStatus
+        };
+
+        // Check if client exists in active clients
+        const clientIndex = operatorStorage.activeClients.findIndex(c => c.id === clientId);
+        
+        if (clientIndex === -1) {
+          // Add new client to active clients
+          operatorStorage.activeClients.push({
+            ...data.client,
+            roomId: data.roomId,
+            roomStatus: currentRoomStatus
+          });
+        } else {
+          // Update existing client
+          operatorStorage.activeClients = operatorStorage.activeClients.map(client => 
+            client.id === clientId 
+              ? {
+                  ...client,
+                  ...data.client, // Update any changed client info
+                  roomId: data.roomId,
+                  roomStatus: currentRoomStatus
+                }
+              : client
+          );
+        }
+        
+        // Initialize or get existing messages array for this client
+        if (!operatorStorage.messages[clientId]) {
+          operatorStorage.messages[clientId] = [];
+        }
+        
+        // Add messages if provided
+        if (data.messages && Array.isArray(data.messages)) {
+          // Clear existing messages for reconnected client to avoid duplicates
+          operatorStorage.messages[clientId] = [];
+          
+          // Process each message
+          data.messages.forEach(message => {
+            // Enhance message with clientId for internal routing
+            const enhancedMessage = {
+              ...message,
+              clientId: clientId,
+              // For system messages, keep senderId as system
+              sentByOperator: message.senderId === operatorStorage.operatorId
+            };
+            
+            operatorStorage.messages[clientId].push(enhancedMessage);
+          });
+          
+          // Sort messages by timestamp
+          operatorStorage.messages[clientId].sort(
+            (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+          );
+          
+          // Notify message handler of each message to re-display them
+          if (messageHandler && typeof messageHandler === 'function') {
+            data.messages.forEach(message => {
+              messageHandler({
+                ...message,
+                clientId: clientId,
+                sentByOperator: message.senderId === operatorStorage.operatorId
+              });
+            });
+          }
+        }
+        
+        operatorStorage.saveToStorage();
+        
+        // Call client list handler with updated active clients
+        if (clientListHandler && typeof clientListHandler === 'function') {
+          clientListHandler([...operatorStorage.activeClients]); // Send a new array to trigger update
+        }
+      }
+    });
+
     // Handle client typing indicator
     socket.on('client_typing', (data) => {
       console.log('Operator received client_typing event:', data);
