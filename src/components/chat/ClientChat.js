@@ -341,7 +341,7 @@ function ClientChat() {
       clearTimeout(clientTypingTimeoutRef.current);
       clientTypingTimeoutRef.current = null; 
     }
-    sendTypingEvent(false);
+    sendTypingEvent(false, inputMessage);
   };
   
   // Handle input change and typing indicator
@@ -351,7 +351,7 @@ function ClientChat() {
     if (!isConnected) return;
     
     // Send typing indicator
-    sendTypingEvent(true);
+    sendTypingEvent(true, e.target.value);
     
     // Clear previous timeout
     if (clientTypingTimeoutRef.current) {
@@ -360,7 +360,7 @@ function ClientChat() {
     
     // Set timeout to clear typing indicator
     clientTypingTimeoutRef.current = setTimeout(() => {
-      sendTypingEvent(false);
+      sendTypingEvent(false, e.target.value);
     }, 2000);
   };
   

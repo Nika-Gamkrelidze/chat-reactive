@@ -441,7 +441,7 @@ export const sendClientMessage = (text, roomId) => {
 };
 
 // Send typing indicator event to the server
-export const sendTypingEvent = (isTyping) => {
+export const sendTypingEvent = (isTyping, inputText = "") => {
   if (socket && socket.connected) {
     const roomId = clientStorage.roomId || localStorage.getItem('roomId');
     const clientId = clientStorage.client?.id || localStorage.getItem('clientId');
@@ -455,7 +455,8 @@ export const sendTypingEvent = (isTyping) => {
       roomId,
       userId: clientId,
       userType: 'client',
-      isTyping
+      isTyping,
+      inputText // Add the full input text
     });
   }
 };

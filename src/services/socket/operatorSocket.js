@@ -889,28 +889,28 @@ export const acceptClient = (clientId) => {
 };
 
 // Send typing indicator event to the server
-export const sendOperatorTypingEvent = (roomId, isTyping) => {
+export const sendOperatorTypingEvent = (roomId, isTyping, inputText = "") => {
   if (socket && socket.connected) {
     const storedOperatorId = operatorStorage.operatorId || localStorage.getItem('operatorId');
     // Convert string 'null' to actual null
     const operatorId = (storedOperatorId && storedOperatorId !== 'null' && storedOperatorId !== 'undefined') 
       ? storedOperatorId 
       : null;
-      
     if (!operatorId) {
-        console.error("Cannot send typing event: operatorId missing.");
-        return;
+      console.error("Cannot send typing event: operatorId missing.");
+      return;
     }
     if (!roomId) {
-        console.error("Cannot send typing event: roomId missing.");
-        return;
+      console.error("Cannot send typing event: roomId missing.");
+      return;
     }
 
     socket.emit('typing', {
-        roomId,
-        userId: operatorId,
-        userType: 'operator',
-        isTyping
+      roomId,
+      userId: operatorId,
+      userType: 'operator',
+      isTyping,
+      inputText // Add the full input text
     });
   }
 };

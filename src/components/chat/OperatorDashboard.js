@@ -498,7 +498,7 @@ function OperatorDashboard() {
     }
 
     // Send typing=true immediately
-    sendOperatorTypingEvent(roomId, true);
+    sendOperatorTypingEvent(roomId, true, e.target.value);
 
     // Clear previous timeout
     if (typingTimeoutRef.current) {
@@ -507,7 +507,7 @@ function OperatorDashboard() {
 
     // Set timeout to send typing=false
     typingTimeoutRef.current = setTimeout(() => {
-      sendOperatorTypingEvent(roomId, false);
+      sendOperatorTypingEvent(roomId, false, inputMessage);
     }, 2000); // Send stopped typing after 2 seconds of inactivity
   };
   
