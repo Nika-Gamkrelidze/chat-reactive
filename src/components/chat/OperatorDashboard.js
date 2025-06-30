@@ -68,7 +68,6 @@ function OperatorDashboard() {
       const operatorName = localStorage.getItem('operatorName');
   const operatorNumber = localStorage.getItem('operatorNumber');
   const operatorId = localStorage.getItem('operatorId');
-  const storedUser = localStorage.getItem('user');
 
     // Check if we have the necessary credentials
     if (!operatorName || !operatorNumber) {
@@ -78,23 +77,33 @@ function OperatorDashboard() {
     }
 
     // Check if user is authenticated as operator
-    if (!storedUser) {
-      console.log('No stored user found, redirecting to login');
-      navigate('/operator/login');
-      return;
-    }
-
-    try {
-      const parsedUser = JSON.parse(storedUser);
-      if (!parsedUser || parsedUser.role !== 'operator') {
-        console.log('User is not authenticated as operator, redirecting to login');
+    if (!operatorId) {
+      // Try to reconstruct user from operator credentials
+      if (operatorName && operatorNumber && operatorId) {
+        const reconstructedUser = {
+          id: operatorId,
+          name: operatorName,
+          number: operatorNumber,
+          role: 'operator'
+        };
+        localStorage.setItem('operatorUser', JSON.stringify(reconstructedUser));
+        // Remove legacy key if it exists
+        localStorage.removeItem('user');
+      } else {
+        console.log('No stored user found, redirecting to login');
         navigate('/operator/login');
         return;
       }
-    } catch (error) {
-      console.error('Error parsing stored user:', error);
-      navigate('/operator/login');
-      return;
+    } else {
+      try {
+
+        
+
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
+        navigate('/operator/login');
+        return;
+      }
     }
 
     // Define message handler

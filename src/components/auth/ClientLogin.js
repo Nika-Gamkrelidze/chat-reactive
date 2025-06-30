@@ -46,6 +46,7 @@ function ClientLogin() {
           localStorage.removeItem('clientId');
           localStorage.removeItem('clientName');
           localStorage.removeItem('clientNumber');
+          localStorage.removeItem('clientUser');
           localStorage.removeItem('user');
         }
       });
@@ -63,7 +64,7 @@ function ClientLogin() {
   useEffect(() => {
     const storedClientName = localStorage.getItem('clientName');
     const storedClientNumber = localStorage.getItem('clientNumber');
-    const storedUser = localStorage.getItem('user');
+    const storedUser = localStorage.getItem('clientUser') || localStorage.getItem('user');
     
     if (storedClientName && storedClientNumber && storedUser) {
       try {
@@ -77,6 +78,7 @@ function ClientLogin() {
         console.error('Error parsing stored user for client:', parseError);
         localStorage.removeItem('clientName');
         localStorage.removeItem('clientNumber');
+        localStorage.removeItem('clientUser');
         localStorage.removeItem('user');
         localStorage.removeItem('clientId');
       }

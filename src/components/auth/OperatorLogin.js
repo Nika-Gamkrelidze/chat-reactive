@@ -44,6 +44,7 @@ function OperatorLogin() {
           localStorage.removeItem('operatorId');
           localStorage.removeItem('operatorName');
           localStorage.removeItem('operatorNumber');
+          localStorage.removeItem('operatorUser');
           localStorage.removeItem('user');
         }
       });
@@ -61,7 +62,7 @@ function OperatorLogin() {
   useEffect(() => {
     const storedOperatorName = localStorage.getItem('operatorName');
     const storedOperatorNumber = localStorage.getItem('operatorNumber');
-    const storedUser = localStorage.getItem('user');
+    const storedUser = localStorage.getItem('operatorUser') || localStorage.getItem('user');
 
     if (storedOperatorName && storedOperatorNumber && storedUser) {
       try {
@@ -75,6 +76,7 @@ function OperatorLogin() {
         console.error('Error parsing stored user:', error);
         localStorage.removeItem('operatorName');
         localStorage.removeItem('operatorNumber');
+        localStorage.removeItem('operatorUser');
         localStorage.removeItem('user');
       }
     }
