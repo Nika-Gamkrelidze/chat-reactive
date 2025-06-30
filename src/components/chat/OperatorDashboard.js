@@ -65,10 +65,10 @@ function OperatorDashboard() {
   // Initialize socket and set up event handlers
   useEffect(() => {
     // Get stored credentials
-    const operatorName = sessionStorage.getItem('operatorName');
-    const operatorNumber = sessionStorage.getItem('operatorNumber');
-    const operatorId = sessionStorage.getItem('operatorId');
-    const storedUser = sessionStorage.getItem('user');
+      const operatorName = localStorage.getItem('operatorName');
+  const operatorNumber = localStorage.getItem('operatorNumber');
+  const operatorId = localStorage.getItem('operatorId');
+  const storedUser = localStorage.getItem('user');
 
     // Check if we have the necessary credentials
     if (!operatorName || !operatorNumber) {

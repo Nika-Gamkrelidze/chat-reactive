@@ -41,10 +41,10 @@ function ClientChat() {
   const [feedbackScore, setFeedbackScore] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState('');
   
-  // Get client info from session storage
-  const clientName = sessionStorage.getItem('clientName');
-  const clientNumber = sessionStorage.getItem('clientNumber');
-  const clientId = sessionStorage.getItem('clientId');
+  // Get client info from local storage
+  const clientName = localStorage.getItem('clientName');
+  const clientNumber = localStorage.getItem('clientNumber');
+  const clientId = localStorage.getItem('clientId');
   
   useEffect(() => {
     // Redirect to login if no client info
@@ -84,7 +84,7 @@ function ClientChat() {
         return;
       }
       
-      const currentClientId = sessionStorage.getItem('clientId');
+      const currentClientId = localStorage.getItem('clientId');
 
       setMessages(prevMessages => {
         const messagesToProcess = Array.isArray(message) ? message : [message];
@@ -178,11 +178,11 @@ function ClientChat() {
       if (sessionData.roomId) {
         console.log('Setting room ID:', sessionData.roomId);
         setRoomId(sessionData.roomId);
-        // Also store in session storage for persistence
-        sessionStorage.setItem('roomId', sessionData.roomId);
+        // Also store in local storage for persistence
+        localStorage.setItem('roomId', sessionData.roomId);
       } else {
-        // Try to get room ID from session storage if not in session data
-        const storedRoomId = sessionStorage.getItem('roomId');
+        // Try to get room ID from local storage if not in session data
+        const storedRoomId = localStorage.getItem('roomId');
         if (storedRoomId) {
           console.log('Using stored room ID:', storedRoomId);
           setRoomId(storedRoomId);
@@ -304,8 +304,8 @@ function ClientChat() {
     
     if (!inputMessage.trim() || !isConnected) return;
     
-    const currentRoomId = roomId || sessionStorage.getItem('roomId');
-    const actualClientId = sessionStorage.getItem('clientId'); // Get client ID for the message object
+    const currentRoomId = roomId || localStorage.getItem('roomId');
+    const actualClientId = localStorage.getItem('clientId'); // Get client ID for the message object
 
     if (!currentRoomId) {
       console.error('Cannot send message: room ID not available');
@@ -407,7 +407,7 @@ function ClientChat() {
   };
   
   const handleCallbackRequest = () => {
-    const currentRoomId = sessionStorage.getItem('roomId');
+    const currentRoomId = localStorage.getItem('roomId');
     
     if (!currentRoomId) {
       console.error('Cannot send callback request: room ID not available');

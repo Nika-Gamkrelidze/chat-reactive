@@ -26,9 +26,9 @@ function ClientLogin() {
         console.log('Client session data received:', sessionData);
         
         if (sessionData.client) {
-          sessionStorage.setItem('clientId', sessionData.client.id);
-          sessionStorage.setItem('clientName', loginName);
-          sessionStorage.setItem('clientNumber', loginNumber);
+          localStorage.setItem('clientId', sessionData.client.id);
+          localStorage.setItem('clientName', loginName);
+          localStorage.setItem('clientNumber', loginNumber);
           
           login({
             id: sessionData.client.id,
@@ -43,10 +43,10 @@ function ClientLogin() {
           console.error('Session received but client data is missing or invalid.');
           setGeneralError('Login failed: Invalid session data received.');
           setIsLoading(false);
-          sessionStorage.removeItem('clientId');
-          sessionStorage.removeItem('clientName');
-          sessionStorage.removeItem('clientNumber');
-          sessionStorage.removeItem('user');
+          localStorage.removeItem('clientId');
+          localStorage.removeItem('clientName');
+          localStorage.removeItem('clientNumber');
+          localStorage.removeItem('user');
         }
       });
       
@@ -61,24 +61,24 @@ function ClientLogin() {
   }, [login]);
 
   useEffect(() => {
-    const storedClientName = sessionStorage.getItem('clientName');
-    const storedClientNumber = sessionStorage.getItem('clientNumber');
-    const storedUser = sessionStorage.getItem('user');
+    const storedClientName = localStorage.getItem('clientName');
+    const storedClientNumber = localStorage.getItem('clientNumber');
+    const storedUser = localStorage.getItem('user');
     
     if (storedClientName && storedClientNumber && storedUser) {
       try {
         const user = JSON.parse(storedUser);
         if (user && user.role === 'client') {
-          console.log('Client already logged in via sessionStorage, navigating to chat.');
+          console.log('Client already logged in via localStorage, navigating to chat.');
           navigate('/client/chat', { replace: true });
           return;
         }
       } catch (parseError) {
         console.error('Error parsing stored user for client:', parseError);
-        sessionStorage.removeItem('clientName');
-        sessionStorage.removeItem('clientNumber');
-        sessionStorage.removeItem('user');
-        sessionStorage.removeItem('clientId');
+        localStorage.removeItem('clientName');
+        localStorage.removeItem('clientNumber');
+        localStorage.removeItem('user');
+        localStorage.removeItem('clientId');
       }
     }
 

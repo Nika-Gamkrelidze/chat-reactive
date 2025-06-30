@@ -9,9 +9,9 @@ export function AuthProvider({ children }) {
   
   // Check for existing user on mount
   useEffect(() => {
-    // Check if we have user data in session storage
+    // Check if we have user data in local storage
     const checkExistingAuth = () => {
-      const storedUser = sessionStorage.getItem('user');
+      const storedUser = localStorage.getItem('user');
       
       if (storedUser) {
         try {
@@ -20,7 +20,7 @@ export function AuthProvider({ children }) {
           setIsAuthenticated(true);
         } catch (error) {
           console.error('Error parsing stored user:', error);
-          sessionStorage.removeItem('user');
+          localStorage.removeItem('user');
         }
       }
       
@@ -34,28 +34,28 @@ export function AuthProvider({ children }) {
   const login = (userData) => {
     setUser(userData);
     setIsAuthenticated(true);
-    sessionStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem('user', JSON.stringify(userData));
   };
   
   // Logout function
   const logout = () => {
     setUser(null);
     setIsAuthenticated(false);
-    sessionStorage.removeItem('user');
+    localStorage.removeItem('user');
     
     // Clear operator/client specific data
-    if (sessionStorage.getItem('operatorName')) {
+    if (localStorage.getItem('operatorName')) {
       // Use the clearAll method from operatorStorage
       const { clearOperatorData } = require('../services/socket/operatorSocket');
       clearOperatorData();
     }
     
-    if (sessionStorage.getItem('clientName')) {
-      sessionStorage.removeItem('clientName');
-      sessionStorage.removeItem('clientNumber');
-      sessionStorage.removeItem('clientId');
-      sessionStorage.removeItem('clientActiveOperator');
-      sessionStorage.removeItem('clientMessages');
+    if (localStorage.getItem('clientName')) {
+      localStorage.removeItem('clientName');
+      localStorage.removeItem('clientNumber');
+      localStorage.removeItem('clientId');
+      localStorage.removeItem('clientActiveOperator');
+      localStorage.removeItem('clientMessages');
     }
   };
   

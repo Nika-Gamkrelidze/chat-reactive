@@ -32,7 +32,7 @@ export const clientStorage = {
       this.roomId = sessionData.roomId;
     }
     
-    // Save to sessionStorage for persistence
+    // Save to localStorage for persistence
     this.saveToStorage();
     
     return this;
@@ -66,27 +66,27 @@ export const clientStorage = {
     return added;
   },
   
-  // Save data to sessionStorage
+  // Save data to localStorage
   saveToStorage: function() {
     try {
-      sessionStorage.setItem('clientData', JSON.stringify(this.client));
-      sessionStorage.setItem('operatorData', JSON.stringify(this.operatorInfo));
-      sessionStorage.setItem('roomId', this.roomId);
-      sessionStorage.setItem('hasOperator', this.hasOperator);
-      sessionStorage.setItem('messages', JSON.stringify(this.messages));
+      localStorage.setItem('clientData', JSON.stringify(this.client));
+      localStorage.setItem('operatorData', JSON.stringify(this.operatorInfo));
+      localStorage.setItem('roomId', this.roomId);
+      localStorage.setItem('hasOperator', this.hasOperator);
+      localStorage.setItem('messages', JSON.stringify(this.messages));
     } catch (e) {
-      console.error('Error saving to sessionStorage:', e);
+      console.error('Error saving to localStorage:', e);
     }
   },
   
-  // Load data from sessionStorage
+  // Load data from localStorage
   loadFromStorage: function() {
     try {
-      const clientData = sessionStorage.getItem('clientData');
-      const operatorData = sessionStorage.getItem('operatorData');
-      const roomId = sessionStorage.getItem('roomId');
-      const hasOperator = sessionStorage.getItem('hasOperator');
-      const messages = sessionStorage.getItem('messages');
+      const clientData = localStorage.getItem('clientData');
+      const operatorData = localStorage.getItem('operatorData');
+      const roomId = localStorage.getItem('roomId');
+      const hasOperator = localStorage.getItem('hasOperator');
+      const messages = localStorage.getItem('messages');
       
       if (clientData) this.client = JSON.parse(clientData);
       if (operatorData) this.operatorInfo = JSON.parse(operatorData);
@@ -94,7 +94,7 @@ export const clientStorage = {
       if (hasOperator) this.hasOperator = hasOperator === 'true';
       if (messages) this.messages = JSON.parse(messages);
     } catch (e) {
-      console.error('Error loading from sessionStorage:', e);
+      console.error('Error loading from localStorage:', e);
     }
     
     return this;
@@ -103,16 +103,16 @@ export const clientStorage = {
   // Get user credentials from storage
   getUserCredentials: function() {
     return {
-      name: sessionStorage.getItem('clientName'),
-      number: sessionStorage.getItem('clientNumber'),
-      clientId: sessionStorage.getItem('clientId')
+      name: localStorage.getItem('clientName'),
+      number: localStorage.getItem('clientNumber'),
+      clientId: localStorage.getItem('clientId')
     };
   },
   
   // Store user credentials
   storeUserCredentials: function(name, number) {
-    sessionStorage.setItem('clientName', name);
-    sessionStorage.setItem('clientNumber', number);
+    localStorage.setItem('clientName', name);
+    localStorage.setItem('clientNumber', number);
   },
   
   // Clear all data
@@ -124,15 +124,15 @@ export const clientStorage = {
     this.operatorInfo = null;
     this.messages = [];
     
-    // Clear sessionStorage
-    sessionStorage.removeItem('clientData');
-    sessionStorage.removeItem('operatorData');
-    sessionStorage.removeItem('roomId');
-    sessionStorage.removeItem('hasOperator');
-    sessionStorage.removeItem('messages');
-    sessionStorage.removeItem('clientName');
-    sessionStorage.removeItem('clientNumber');
-    sessionStorage.removeItem('clientId');
+    // Clear localStorage
+    localStorage.removeItem('clientData');
+    localStorage.removeItem('operatorData');
+    localStorage.removeItem('roomId');
+    localStorage.removeItem('hasOperator');
+    localStorage.removeItem('messages');
+    localStorage.removeItem('clientName');
+    localStorage.removeItem('clientNumber');
+    localStorage.removeItem('clientId');
   }
 };
 
@@ -216,13 +216,13 @@ export const createClientSocket = () => {
       // Update socket auth with new client ID if available
       if (data.client && data.client.id) {
         socket.auth.clientId = data.client.id;
-        sessionStorage.setItem('clientId', data.client.id);
+        localStorage.setItem('clientId', data.client.id);
       }
       
       // Store client name and number
       if (socket.auth.name && socket.auth.number) {
-        sessionStorage.setItem('clientName', socket.auth.name);
-        sessionStorage.setItem('clientNumber', socket.auth.number);
+        localStorage.setItem('clientName', socket.auth.name);
+        localStorage.setItem('clientNumber', socket.auth.number);
       }
       
       // Call session handler if defined
@@ -325,7 +325,7 @@ export const initClientSocket = (name, number, clientId = null) => {
   socket.auth = {
     name: name,
     number: number,
-    userId: clientId || sessionStorage.getItem('clientId'),
+    userId: clientId || localStorage.getItem('clientId'),
     type: 'client'
   };
   
@@ -343,9 +343,9 @@ export const reconnectClientSocket = () => {
   clientStorage.loadFromStorage();
   
   // Get stored credentials
-  const clientId = sessionStorage.getItem('clientId');
-  const name = sessionStorage.getItem('clientName');
-  const number = sessionStorage.getItem('clientNumber');
+  const clientId = localStorage.getItem('clientId');
+  const name = localStorage.getItem('clientName');
+  const number = localStorage.getItem('clientNumber');
   
   console.log('Attempting to reconnect with stored credentials:', { clientId, name, number });
   
@@ -416,8 +416,8 @@ export const sendClientMessage = (text, roomId) => {
     return false;
   }
   
-  const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
-  const clientName = sessionStorage.getItem('clientName');
+  const clientId = clientStorage.client?.id || localStorage.getItem('clientId');
+  const clientName = localStorage.getItem('clientName');
   
   if (!clientId) {
     console.error('Cannot send message: client ID not available');
@@ -443,8 +443,8 @@ export const sendClientMessage = (text, roomId) => {
 // Send typing indicator event to the server
 export const sendTypingEvent = (isTyping) => {
   if (socket && socket.connected) {
-    const roomId = clientStorage.roomId || sessionStorage.getItem('roomId');
-    const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
+    const roomId = clientStorage.roomId || localStorage.getItem('roomId');
+    const clientId = clientStorage.client?.id || localStorage.getItem('clientId');
 
     if (!roomId || !clientId) {
       console.error("Cannot send typing event: roomId or clientId missing.");
@@ -482,8 +482,8 @@ export const sendClientEndChat = (clientData) => {
 // Send feedback to server
 export const sendClientFeedback = (feedbackData) => {
   if (socket && socket.connected) {
-    const currentRoomId = clientStorage.roomId || sessionStorage.getItem('roomId');
-    const currentClientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
+    const currentRoomId = clientStorage.roomId || localStorage.getItem('roomId');
+    const currentClientId = clientStorage.client?.id || localStorage.getItem('clientId');
 
     if (!currentRoomId) {
       console.error("Cannot send feedback: Room ID not found.");

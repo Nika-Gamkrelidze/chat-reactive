@@ -23,9 +23,9 @@ function OperatorLogin() {
         const { operator } = sessionData;
 
         if (operator && operator.id) {
-          sessionStorage.setItem('operatorId', operator.id);
-          sessionStorage.setItem('operatorName', operator.name || loginName);
-          sessionStorage.setItem('operatorNumber', operator.number || loginNumber);
+          localStorage.setItem('operatorId', operator.id);
+          localStorage.setItem('operatorName', operator.name || loginName);
+          localStorage.setItem('operatorNumber', operator.number || loginNumber);
 
           login({
             id: operator.id,
@@ -41,10 +41,10 @@ function OperatorLogin() {
           console.error('Session received but operator data is missing or invalid.');
           setError('Login failed: Invalid session data received.');
           setIsLoading(false);
-          sessionStorage.removeItem('operatorId');
-          sessionStorage.removeItem('operatorName');
-          sessionStorage.removeItem('operatorNumber');
-          sessionStorage.removeItem('user');
+          localStorage.removeItem('operatorId');
+          localStorage.removeItem('operatorName');
+          localStorage.removeItem('operatorNumber');
+          localStorage.removeItem('user');
         }
       });
 
@@ -59,23 +59,23 @@ function OperatorLogin() {
   }, [login]);
 
   useEffect(() => {
-    const storedOperatorName = sessionStorage.getItem('operatorName');
-    const storedOperatorNumber = sessionStorage.getItem('operatorNumber');
-    const storedUser = sessionStorage.getItem('user');
+    const storedOperatorName = localStorage.getItem('operatorName');
+    const storedOperatorNumber = localStorage.getItem('operatorNumber');
+    const storedUser = localStorage.getItem('user');
 
     if (storedOperatorName && storedOperatorNumber && storedUser) {
       try {
         const user = JSON.parse(storedUser);
         if (user && user.role === 'operator') {
-          console.log('Already logged in via sessionStorage, navigating to dashboard.');
+          console.log('Already logged in via localStorage, navigating to dashboard.');
           navigate('/operator/dashboard', { replace: true });
           return;
         }
       } catch (error) {
         console.error('Error parsing stored user:', error);
-        sessionStorage.removeItem('operatorName');
-        sessionStorage.removeItem('operatorNumber');
-        sessionStorage.removeItem('user');
+        localStorage.removeItem('operatorName');
+        localStorage.removeItem('operatorNumber');
+        localStorage.removeItem('user');
       }
     }
 
