@@ -39,6 +39,9 @@ function OperatorDashboard() {
   // State to track client typing status { clientId: timeoutId | null }
   const [clientTypingStatus, setClientTypingStatus] = useState({});
   
+  // State to track temporary typing messages { clientId: { text, timestamp } }
+  const [temporaryTypingMessages, setTemporaryTypingMessages] = useState({});
+  
   // Refs to prevent multiple effect runs
   const socketInitializedRef = useRef(false);
   const messageHandlerRef = useRef(null);
@@ -115,6 +118,18 @@ function OperatorDashboard() {
       if (!clientId) return;
 
       const isFromOperator = message.senderId === operatorStorage.operatorId;
+
+      // Check if this message matches a temporary typing message and remove it
+      if (!isFromOperator) {
+        setTemporaryTypingMessages(prevTempMessages => {
+          const tempMessage = prevTempMessages[clientId];
+          if (tempMessage && tempMessage.text === message.text.trim()) {
+            // Remove the temporary message
+            return { ...prevTempMessages, [clientId]: null };
+          }
+          return prevTempMessages;
+        });
+      }
 
       setMessages(prevMessages => {
         // Initialize or get existing messages for this client
@@ -286,8 +301,8 @@ function OperatorDashboard() {
     
     // Define typing handler
     typingHandlerRef.current = (typingData) => {
-      const { userId, isTyping } = typingData; // userId here is the clientId
-      console.log(`Client typing update: ${userId} is typing: ${isTyping}`);
+      const { userId, isTyping, inputText } = typingData; // userId here is the clientId
+      console.log(`Client typing update: ${userId} is typing: ${isTyping}, inputText: "${inputText}"`);
 
       setClientTypingStatus(prevStatus => {
         const existingTimeoutId = prevStatus[userId];
@@ -308,6 +323,23 @@ function OperatorDashboard() {
         } else {
           // If isTyping is false, just clear the status
           return { ...prevStatus, [userId]: null };
+        }
+      });
+
+      // Handle temporary typing messages
+      setTemporaryTypingMessages(prevMessages => {
+        if (isTyping && inputText && inputText.trim()) {
+          // Return new state with the temporary message
+          return { 
+            ...prevMessages, 
+            [userId]: { 
+              text: inputText.trim(), 
+              timestamp: new Date().toISOString()
+            } 
+          };
+        } else {
+          // If not typing or no input text, clear the temporary message
+          return { ...prevMessages, [userId]: null };
         }
       });
     };
@@ -341,6 +373,9 @@ function OperatorDashboard() {
       setSessionHandler(null);
       setClientChatClosedHandler(null);
       setTypingHandler(null);
+      
+      // Clear all temporary typing messages
+      setTemporaryTypingMessages({});
     };
   }, [navigate]);
   
@@ -355,6 +390,15 @@ function OperatorDashboard() {
         c.id === client.id ? { ...c, unreadCount: 0 } : c // Reset count to 0
       )
     );
+    
+    // Clear temporary typing messages for other clients (keep only for selected client)
+    setTemporaryTypingMessages(prevMessages => {
+      const updatedMessages = {};
+      if (prevMessages[client.id]) {
+        updatedMessages[client.id] = prevMessages[client.id];
+      }
+      return updatedMessages;
+    });
     
     // Request latest messages for this client if needed
     if (!messages[client.id] || messages[client.id].length === 0) {
@@ -506,8 +550,8 @@ function OperatorDashboard() {
       return;
     }
 
-    // Send typing=true immediately
-    sendOperatorTypingEvent(roomId, true, e.target.value);
+    // Send typing=true immediately (no inputText for operator)
+    sendOperatorTypingEvent(roomId, true);
 
     // Clear previous timeout
     if (typingTimeoutRef.current) {
@@ -516,7 +560,7 @@ function OperatorDashboard() {
 
     // Set timeout to send typing=false
     typingTimeoutRef.current = setTimeout(() => {
-      sendOperatorTypingEvent(roomId, false, inputMessage);
+      sendOperatorTypingEvent(roomId, false);
     }, 2000); // Send stopped typing after 2 seconds of inactivity
   };
   
@@ -689,8 +733,24 @@ function OperatorDashboard() {
                       შეტყობინებები არ არის
                     </div>
                   )}
+                  
+                  {/* Temporary Typing Message */}
+                  {selectedClient && temporaryTypingMessages[selectedClient.id] && (
+                    <div className="flex justify-start mb-4">
+                      <div className="bg-gray-100 border-2 border-dashed border-gray-300 text-gray-500 rounded-lg px-4 py-2 max-w-xs opacity-60 animate-pulse">
+                        <div className="flex items-center mb-1">
+                          <span className="text-xs font-medium text-gray-400">იწერება...</span>
+                        </div>
+                        <span className="break-words italic">{temporaryTypingMessages[selectedClient.id].text}</span>
+                        <div className="text-xs mt-1 opacity-50">
+                          {new Date(temporaryTypingMessages[selectedClient.id].timestamp).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Client Typing Indicator */}
-                  {selectedClient && clientTypingStatus[selectedClient.id] && (
+                  {selectedClient && clientTypingStatus[selectedClient.id] && !temporaryTypingMessages[selectedClient.id] && (
                     <div className="flex justify-start mb-4">
                       <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-xs">
                         <div className="flex items-center space-x-1">

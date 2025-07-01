@@ -889,7 +889,7 @@ export const acceptClient = (clientId) => {
 };
 
 // Send typing indicator event to the server
-export const sendOperatorTypingEvent = (roomId, isTyping, inputText = "") => {
+export const sendOperatorTypingEvent = (roomId, isTyping) => {
   if (socket && socket.connected) {
     const storedOperatorId = operatorStorage.operatorId || localStorage.getItem('operatorId');
     // Convert string 'null' to actual null
@@ -909,8 +909,8 @@ export const sendOperatorTypingEvent = (roomId, isTyping, inputText = "") => {
       roomId,
       userId: operatorId,
       userType: 'operator',
-      isTyping,
-      inputText // Add the full input text
+      isTyping
+      // Note: Operator typing events do not send inputText
     });
   }
 };
