@@ -29,12 +29,12 @@ function ClientChat() {
   const [operatorInfo, setOperatorInfo] = useState(null);
   const [operatorTyping, setOperatorTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [showChatbot, setShowChatbot] = useState(true);
+  const [socketInitialized, setSocketInitialized] = useState(false);
   const messagesEndRef = useRef(null);
   const clientTypingTimeoutRef = useRef(null);
   const operatorTypingTimeoutRef = useRef(null);
-  const socketInitializedRef = useRef(false);
   const navigate = useNavigate();
   const [roomId, setRoomId] = useState(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -53,8 +53,28 @@ function ClientChat() {
       return;
     }
 
-    if (socketInitializedRef.current) return;
-    socketInitializedRef.current = true;
+    // Check if client has already connected to operator
+    const hasConnectedToOperator = localStorage.getItem('hasConnectedToOperator') === 'true';
+    
+    if (hasConnectedToOperator) {
+      console.log('Client has already connected to operator, skipping chatbot phase');
+      setShowChatbot(false);
+      // Initialize socket immediately
+      const timeoutId = initializeSocket();
+      
+      // Clean up timeout on unmount
+      return () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
+    }
+  }, [clientName, clientNumber, navigate]);
+
+  const initializeSocket = () => {
+    if (socketInitialized) return;
+    setSocketInitialized(true);
+    setIsLoading(true);
 
     // Define message handler function
     const handleNewMessage = (message) => {
@@ -148,12 +168,17 @@ function ClientChat() {
       if (sessionData.feedbackProcessed) {
         // Cleanup and redirect regardless of success, as the feedback process is complete.
         console.log(`Feedback process finished (success: ${sessionData.success}), cleaning up and redirecting.`);
+        
+        // Clear the operator connection flag
+        localStorage.removeItem('hasConnectedToOperator');
+        
         // Reset component state
         setMessages([]);
         setHasOperator(false);
         setOperatorInfo(null);
         setRoomId(null);
         setIsConnected(false);
+        setSocketInitialized(false);
         // Navigate to login
         navigate('/client/login');
 
@@ -269,10 +294,12 @@ function ClientChat() {
       }
     }, 5000);
     
+    return connectionTimeout;
+  };
+
+  useEffect(() => {
     // Clean up on unmount
     return () => {
-      clearTimeout(connectionTimeout);
-      
       // Clear any pending typing timeouts
       if (clientTypingTimeoutRef.current) {
         clearTimeout(clientTypingTimeoutRef.current);
@@ -289,7 +316,7 @@ function ClientChat() {
         currentSocket.off('connect_error');
       }
     };
-  }, [clientName, clientNumber, clientId, navigate]);
+  }, []);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -423,13 +450,28 @@ function ClientChat() {
     
     sendClientCallbackRequest(callbackData);
     
+    // Clear the operator connection flag since chat is ending
+    localStorage.removeItem('hasConnectedToOperator');
+    
     // Navigate to login
     navigate('/client/login');
   };
   
   const handleConnectToOperator = () => {
     setShowChatbot(false);
-    setIsLoading(false);
+    
+    // Store that client has connected to operator
+    localStorage.setItem('hasConnectedToOperator', 'true');
+    
+    // Initialize socket when user clicks connect to operator
+    const timeoutId = initializeSocket();
+    
+    // Clean up timeout on unmount
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   };
   
   // Log operatorTyping state during render

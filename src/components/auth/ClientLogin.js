@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { initClientSocket, setClientSessionHandler } from '../../services/socket/clientSocket';
 import { FaUser, FaPhone, FaRegCommentDots } from 'react-icons/fa';
 
 function ClientLogin() {
@@ -10,57 +9,10 @@ function ClientLogin() {
   const [generalError, setGeneralError] = useState('');
   const [inputErrors, setInputErrors] = useState({ name: '', number: '' });
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionReceived, setSessionReceived] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
   
-  const attemptLogin = useCallback(async (loginName, loginNumber) => {
-    setGeneralError('');
-    setInputErrors({ name: '', number: '' });
-    setIsLoading(true);
-    setSessionReceived(false);
-    
-    try {
-      setClientSessionHandler((sessionData) => {
-        console.log('Client session data received:', sessionData);
-        
-        if (sessionData.client) {
-          localStorage.setItem('clientId', sessionData.client.id);
-          localStorage.setItem('clientName', loginName);
-          localStorage.setItem('clientNumber', loginNumber);
-          
-          login({
-            id: sessionData.client.id,
-            name: loginName,
-            number: loginNumber,
-            role: 'client'
-          });
-          
-          console.log('Session received, setting state to navigate to chat...');
-          setSessionReceived(true);
-        } else {
-          console.error('Session received but client data is missing or invalid.');
-          setGeneralError('Login failed: Invalid session data received.');
-          setIsLoading(false);
-          localStorage.removeItem('clientId');
-          localStorage.removeItem('clientName');
-          localStorage.removeItem('clientNumber');
-          localStorage.removeItem('clientUser');
-          localStorage.removeItem('user');
-        }
-      });
-      
-      console.log(`Attempting to login client with name: ${loginName}, number: ${loginNumber}`);
-      initClientSocket(loginName, loginNumber);
-      
-    } catch (err) {
-      console.error('Login error during client attemptLogin:', err);
-      setGeneralError('Failed to connect. Please try again.');
-      setIsLoading(false);
-    }
-  }, [login]);
-
   useEffect(() => {
     const storedClientName = localStorage.getItem('clientName');
     const storedClientNumber = localStorage.getItem('clientNumber');
@@ -81,6 +33,7 @@ function ClientLogin() {
         localStorage.removeItem('clientUser');
         localStorage.removeItem('user');
         localStorage.removeItem('clientId');
+        localStorage.removeItem('hasConnectedToOperator');
       }
     }
 
@@ -88,20 +41,12 @@ function ClientLogin() {
     const nameFromUrl = queryParams.get('name');
     const numberFromUrl = queryParams.get('number');
 
-    if (nameFromUrl && numberFromUrl && !isLoading) {
-      console.log('Found client name and number in URL, attempting auto-login.');
+    if (nameFromUrl && numberFromUrl) {
+      console.log('Found client name and number in URL, pre-filling form.');
       setName(nameFromUrl);
       setNumber(numberFromUrl);
-      attemptLogin(nameFromUrl, numberFromUrl);
     }
-  }, [navigate, location.search, isLoading, attemptLogin]);
-  
-  useEffect(() => {
-    if (sessionReceived) {
-      console.log('Session received flag is true, navigating to client chat.');
-      navigate('/client/chat', { replace: true });
-    }
-  }, [sessionReceived, navigate]);
+  }, [navigate, location.search]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -126,8 +71,33 @@ function ClientLogin() {
       return;
     }
 
-    if (!isLoading) {
-      attemptLogin(name, number);
+    setIsLoading(true);
+    
+    try {
+      // Store client credentials
+      localStorage.setItem('clientName', name);
+      localStorage.setItem('clientNumber', number);
+      
+      // Create user object and store it
+      const user = {
+        name: name,
+        number: number,
+        role: 'client'
+      };
+      
+      localStorage.setItem('clientUser', JSON.stringify(user));
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      // Login to auth context
+      login(user);
+      
+      console.log('Client credentials stored, navigating to chat.');
+      navigate('/client/chat', { replace: true });
+      
+    } catch (err) {
+      console.error('Login error:', err);
+      setGeneralError('Failed to login. Please try again.');
+      setIsLoading(false);
     }
   };
 
@@ -149,11 +119,7 @@ function ClientLogin() {
         <div className="flex-grow flex flex-col justify-center">
           {generalError && (
             <div className="bg-red-100 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-3 text-sm">
-              {generalError === 'Failed to connect. Please try again.' ? 
-                'კავშირი ვერ მოხერხდა. გთხოვთ სცადოთ ხელახლა.' : 
-               (generalError === 'Login failed: Invalid session data received.' ?
-                'ავტორიზაცია ვერ მოხერხდა: მიღებულია არასწორი სესიის მონაცემები.' : generalError)
-              }
+              {generalError}
             </div>
           )}
           

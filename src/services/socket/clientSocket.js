@@ -133,6 +133,7 @@ export const clientStorage = {
     localStorage.removeItem('clientName');
     localStorage.removeItem('clientNumber');
     localStorage.removeItem('clientId');
+    localStorage.removeItem('hasConnectedToOperator');
   }
 };
 
@@ -525,6 +526,9 @@ export const cleanupClientSocket = () => {
   
   // Clear storage
   clientStorage.clear();
+  
+  // Also clear the operator connection flag
+  localStorage.removeItem('hasConnectedToOperator');
 };
 
 // Send callback request to server
