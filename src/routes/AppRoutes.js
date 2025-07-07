@@ -20,7 +20,7 @@ function AppRoutes() {
           </PrivateRoute>
         } 
       />
-      {/* <Route path="/operator/login" element={<OperatorLogin />} />
+      <Route path="/operator/login" element={<OperatorLogin />} />
       <Route 
         path="/operator/dashboard" 
         element={
@@ -28,7 +28,7 @@ function AppRoutes() {
             <OperatorDashboard />
           </PrivateRoute>
         } 
-      /> */}
+      />
     </Routes>
   );
 }
