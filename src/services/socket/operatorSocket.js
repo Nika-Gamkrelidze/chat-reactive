@@ -606,62 +606,101 @@ export const createOperatorSocket = () => {
       }
     });
 
-    // Handle client ending chat (sets roomStatus to 'closed')
+    // Helper function to handle chat cleanup for various end events
+    const handleChatCleanup = (clientId, eventType = 'chat_ended') => {
+      if (!clientId) return;
+      
+      console.log(`${eventType}: Cleaning up chat for client ${clientId}`);
+
+      let storageUpdated = false;
+      let listUpdated = false;
+
+      // Remove client from clients storage
+      if (operatorStorage.clients && operatorStorage.clients[clientId]) {
+        delete operatorStorage.clients[clientId];
+        storageUpdated = true;
+        console.log(`Removed client ${clientId} from operatorStorage.clients`);
+      }
+
+      // Remove client messages from storage
+      if (operatorStorage.messages && operatorStorage.messages[clientId]) {
+        delete operatorStorage.messages[clientId];
+        storageUpdated = true;
+        console.log(`Removed messages for client ${clientId} from operatorStorage.messages`);
+      }
+
+      // Remove client from active clients list
+      const currentActiveClients = operatorStorage.activeClients;
+      const clientIndex = currentActiveClients.findIndex(c => c.id === clientId);
+      let updatedActiveClientsList = currentActiveClients;
+
+      if (clientIndex !== -1) {
+        console.log(`Removing client ${clientId} from activeClients at index ${clientIndex}`);
+        updatedActiveClientsList = currentActiveClients.filter(c => c.id !== clientId);
+        operatorStorage.activeClients = updatedActiveClientsList;
+        listUpdated = true;
+      } else {
+        console.log(`Client ${clientId} not found in activeClients.`);
+      }
+
+      // If any part of the state actually changed
+      if (storageUpdated || listUpdated) {
+        console.log(`Saving updated storage after ${eventType}`);
+        operatorStorage.saveToStorage();
+
+        // Notify the main client list handler with the updated list
+        if (clientListHandler && typeof clientListHandler === 'function') {
+          console.log('Calling clientListHandler with updated list:', updatedActiveClientsList);
+          clientListHandler(updatedActiveClientsList);
+        }
+
+        // Notify the specific handler for this event
+        if (clientChatClosedHandler && typeof clientChatClosedHandler === 'function') {
+          console.log('Calling clientChatClosedHandler');
+          clientChatClosedHandler(clientId);
+        }
+      } else {
+        console.log(`No updates made for ${eventType} event.`);
+      }
+    };
+
+    // Handle client ending chat
     socket.on('chat_ended', (data) => {
       if (data && data.clientId) {
-        console.log('Client ended chat:', data);
+        handleChatCleanup(data.clientId, 'chat_ended');
+      }
+    });
 
-        let storageUpdated = false;
-        let listUpdated = false;
-        let updatedActiveClientsList = operatorStorage.activeClients; // Start with current
-
-        // Update client roomStatus in clients storage (nested object)
-        if (operatorStorage.clients && operatorStorage.clients[data.clientId]) {
-          if (operatorStorage.clients[data.clientId].roomStatus !== 'closed') {
-             operatorStorage.clients[data.clientId].roomStatus = 'closed';
-             storageUpdated = true;
-             console.log(`Updated roomStatus in operatorStorage.clients for ${data.clientId}`);
-          }
-        }
-
-        // Update active clients list (simple array)
-        const currentActiveClients = operatorStorage.activeClients; // Get current list reference
-        const clientIndex = currentActiveClients.findIndex(c => c.id === data.clientId);
-
-        // Only update if found and not already closed
-        if (clientIndex !== -1 && currentActiveClients[clientIndex].roomStatus !== 'closed') {
-           console.log(`Found client ${data.clientId} in activeClients at index ${clientIndex}, updating status.`);
-           // Create the updated list using map
-           updatedActiveClientsList = currentActiveClients.map((client, index) =>
-              index === clientIndex
-                ? { ...client, roomStatus: 'closed' } // Update the specific client
-                : client
-           );
-           // Reassign the storage list to the new array reference
-           operatorStorage.activeClients = updatedActiveClientsList;
-           listUpdated = true;
+    // Handle chat ended acknowledgment
+    socket.on('chat_ended_ack', (data) => {
+      if (data && data.roomId) {
+        console.log('Chat ended ack received:', data);
+        // Find client by roomId since the event provides roomId instead of clientId
+        const client = operatorStorage.activeClients.find(c => c.roomId === data.roomId);
+        if (client) {
+          handleChatCleanup(client.id, 'chat_ended_ack');
         } else {
-          console.log(`Client ${data.clientId} not found in activeClients or already closed.`);
+          console.log(`No client found for roomId ${data.roomId} in chat_ended_ack`);
         }
+      }
+    });
 
-        // If any part of the state actually changed
-        if (storageUpdated || listUpdated) {
-          console.log('Saving updated storage after client_ended_chat');
-          operatorStorage.saveToStorage();
-
-          // Notify the main client list handler with the *explicitly updated* list
-          if (clientListHandler && typeof clientListHandler === 'function') {
-            console.log('Calling clientListHandler with updated list:', updatedActiveClientsList);
-            clientListHandler(updatedActiveClientsList); // Pass the result directly
-          }
-
-          // Notify the specific handler for this event
-          if (clientChatClosedHandler && typeof clientChatClosedHandler === 'function') {
-             console.log('Calling clientChatClosedHandler');
-            clientChatClosedHandler(data.clientId);
-          }
+    // Handle ask for feedback event  
+    socket.on('ask_for_feedback', (data) => {
+      if (data && (data.clientId || data.roomId)) {
+        console.log('Ask for feedback received:', data);
+        let clientId = data.clientId;
+        
+        // If we only have roomId, find the client
+        if (!clientId && data.roomId) {
+          const client = operatorStorage.activeClients.find(c => c.roomId === data.roomId);
+          clientId = client ? client.id : null;
+        }
+        
+        if (clientId) {
+          handleChatCleanup(clientId, 'ask_for_feedback');
         } else {
-           console.log('No updates made for client_ended_chat event.');
+          console.log(`No client found for ask_for_feedback event:`, data);
         }
       }
     });

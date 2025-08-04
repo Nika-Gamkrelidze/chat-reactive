@@ -286,16 +286,36 @@ function OperatorDashboard() {
     // Define handler for client ending chat
     clientChatClosedHandlerRef.current = (closedClientId) => {
       console.log('Handling client_ended_chat for client ID:', closedClientId);
-      // Check if the closed client is the currently selected one
+      
+      // Clear messages for this client
+      setMessages(prevMessages => {
+        const updatedMessages = { ...prevMessages };
+        delete updatedMessages[closedClientId];
+        console.log(`Removed messages for client ${closedClientId} from component state`);
+        return updatedMessages;
+      });
+      
+      // Clear temporary typing messages for this client
+      setTemporaryTypingMessages(prevTempMessages => {
+        const updatedTempMessages = { ...prevTempMessages };
+        delete updatedTempMessages[closedClientId];
+        return updatedTempMessages;
+      });
+      
+      // Clear client typing status for this client
+      setClientTypingStatus(prevStatus => {
+        const updatedStatus = { ...prevStatus };
+        if (updatedStatus[closedClientId]) {
+          clearTimeout(updatedStatus[closedClientId]);
+          delete updatedStatus[closedClientId];
+        }
+        return updatedStatus;
+      });
+      
+      // Reset selected client if the closed client was selected
       if (selectedClient && selectedClient.id === closedClientId) {
-        // Update the selected client state to reflect the closure
-        setSelectedClient(prevSelectedClient => {
-          if (prevSelectedClient && prevSelectedClient.id === closedClientId) {
-            return { ...prevSelectedClient, roomStatus: 'closed' };
-          }
-          return prevSelectedClient;
-        });
-        // No need to remove from active clients here as clientListHandler already does
+        console.log(`Resetting selected client as client ${closedClientId} ended chat`);
+        setSelectedClient(null);
       }
     };
     
