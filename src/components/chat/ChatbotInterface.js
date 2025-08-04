@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { chatbotService } from '../../services/api/chatbotService';
+import { workingHoursService } from '../../services/api/workingHoursService';
 import { initClientSocket } from '../../services/socket/clientSocket';
 import { FaRobot } from 'react-icons/fa';
 import { FaHeadset } from 'react-icons/fa';
+import WorkingHoursModal from '../common/WorkingHoursModal';
 
 function ChatbotInterface({ onConnectToOperator, clientName, clientNumber, clientPolice }) {
   const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -10,12 +12,26 @@ function ChatbotInterface({ onConnectToOperator, clientName, clientNumber, clien
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [chatHistory, setChatHistory] = useState([]);
+  const [showWorkingHoursModal, setShowWorkingHoursModal] = useState(false);
+  const [workingHours, setWorkingHours] = useState(null);
   const chatContainerRef = useRef(null);
   const lastMessageRef = useRef(null);
 
   useEffect(() => {
     startChat();
+    fetchWorkingHours();
   }, []);
+
+  // Fetch working hours on component mount
+  const fetchWorkingHours = async () => {
+    try {
+      const hours = await workingHoursService.getWorkingHours();
+      setWorkingHours(hours);
+    } catch (error) {
+      console.error('Error fetching working hours:', error);
+      // workingHours will remain null, service will use defaults
+    }
+  };
 
   // Auto scroll when chat history changes
   useEffect(() => {
@@ -84,11 +100,28 @@ function ChatbotInterface({ onConnectToOperator, clientName, clientNumber, clien
     }
   };
 
-  const handleConnectToOperator = () => {
-    // Initialize socket connection
-    initClientSocket(clientName, clientNumber, clientPolice);
-    // Notify parent component
-    onConnectToOperator();
+  const handleConnectToOperator = async () => {
+    try {
+      // Get fresh working hours if not already loaded
+      const currentWorkingHours = workingHours || await workingHoursService.getWorkingHours();
+      
+      // Check if current time is within working hours
+      const hoursCheck = workingHoursService.isWithinWorkingHours(currentWorkingHours);
+      
+      if (hoursCheck.isWithinHours) {
+        // Within working hours - proceed with normal connection
+        initClientSocket(clientName, clientNumber, clientPolice);
+        onConnectToOperator();
+      } else {
+        // Outside working hours - show modal
+        setShowWorkingHoursModal(true);
+      }
+    } catch (error) {
+      console.error('Error checking working hours:', error);
+      // On error, proceed with connection (fail-safe)
+      initClientSocket(clientName, clientNumber, clientPolice);
+      onConnectToOperator();
+    }
   };
 
   if (error) {
@@ -181,6 +214,12 @@ function ChatbotInterface({ onConnectToOperator, clientName, clientNumber, clien
           </div>
         )}
       </div>
+
+      {/* Working Hours Modal */}
+      <WorkingHoursModal
+        isOpen={showWorkingHoursModal}
+        onClose={() => setShowWorkingHoursModal(false)}
+      />
     </div>
   );
 }

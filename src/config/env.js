@@ -21,7 +21,8 @@ const config = {
     barrierToken: 'RSmbFJ84sVDphWIcUb1pqPmcFfqJGf9LT9gMlS1LsjW6Era2U73jVmzoY1IbhV76DkC1W4FgtovKiMlqIa7UvdvkAm34DBVSdGcRhJkCkswZlP3e4CfKzoJdAliF3aXsqYUY5hvruPYJWqufkiuQS7FwCBZUtpXKx0ZxhQH', // Replace with actual token
     endpoints: {
       startChat: '/?r=v1/chat/cb-start',
-      question: '/?r=v1/chat/cb-question'
+      question: '/?r=v1/chat/cb-question',
+      workingHours: '/?r=v1/chat/get-chat-work-hours'
     }
   },
   
