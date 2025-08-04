@@ -52,11 +52,47 @@ function OperatorDashboard() {
   const typingHandlerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const lastNotificationRef = useRef(0);
 
   // Function to scroll to bottom of messages
   const scrollToBottom = () => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Function to play notification sound
+  const playNotificationSound = () => {
+    // Prevent notification spam - only play sound if at least 1 second has passed since last notification
+    const now = Date.now();
+    if (now - lastNotificationRef.current < 1000) {
+      return;
+    }
+    lastNotificationRef.current = now;
+    
+    try {
+      // Create a simple notification beep using Web Audio API
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Create a pleasant notification sound (two quick beeps)
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+      
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime + 0.15);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.25);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+      
+    } catch (error) {
+      console.warn('Could not play notification sound:', error);
     }
   };
 
@@ -118,6 +154,11 @@ function OperatorDashboard() {
       if (!clientId) return;
 
       const isFromOperator = message.senderId === operatorStorage.operatorId;
+
+      // Play notification sound for client messages
+      if (!isFromOperator) {
+        playNotificationSound();
+      }
 
       // Check if this message matches a temporary typing message and remove it
       if (!isFromOperator) {
