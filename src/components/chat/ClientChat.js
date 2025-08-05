@@ -35,6 +35,7 @@ function ClientChat() {
   const messagesEndRef = useRef(null);
   const clientTypingTimeoutRef = useRef(null);
   const operatorTypingTimeoutRef = useRef(null);
+  const autoDisconnectTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const [roomId, setRoomId] = useState(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -45,6 +46,50 @@ function ClientChat() {
   const clientName = localStorage.getItem('clientName');
   const clientNumber = localStorage.getItem('clientNumber');
   const clientId = localStorage.getItem('clientId');
+  
+  // Auto-disconnect timer constants
+  const AUTO_DISCONNECT_DELAY = 5 * 60 * 1000; // 5 minutes in milliseconds
+  
+  // Helper function to start auto-disconnect timer
+  const startAutoDisconnectTimer = () => {
+    // Clear any existing timer
+    if (autoDisconnectTimeoutRef.current) {
+      clearTimeout(autoDisconnectTimeoutRef.current);
+    }
+    
+    // Start new timer
+    autoDisconnectTimeoutRef.current = setTimeout(() => {
+      console.log('Auto-disconnect timer expired - disconnecting client due to inactivity');
+      handleAutoDisconnect();
+    }, AUTO_DISCONNECT_DELAY);
+    
+    console.log('Auto-disconnect timer started - client will be disconnected in 5 minutes if no activity');
+  };
+  
+  // Helper function to clear auto-disconnect timer
+  const clearAutoDisconnectTimer = () => {
+    if (autoDisconnectTimeoutRef.current) {
+      clearTimeout(autoDisconnectTimeoutRef.current);
+      autoDisconnectTimeoutRef.current = null;
+      console.log('Auto-disconnect timer cleared');
+    }
+  };
+  
+  // Handle auto-disconnect (same as manual disconnect)
+  const handleAutoDisconnect = () => {
+    console.log('Auto-disconnecting client due to inactivity');
+    
+    const endChatData = {
+      userId: clientId,
+      roomId,
+      userType: 'client'
+    };
+    
+    sendClientEndChat(endChatData);
+    
+    // Show feedback modal instead of immediately ending chat
+    setShowFeedbackModal(true);
+  };
   
   useEffect(() => {
     // Redirect to login if no client info
@@ -152,6 +197,11 @@ function ClientChat() {
               updatedMessages[existingIndex] = finalMessage; // Update existing
             } else {
               updatedMessages.push(finalMessage); // Add new
+            }
+            
+            // Start auto-disconnect timer if this is an operator message
+            if (finalMessage.sender === 'operator' && finalMessage.text) {
+              startAutoDisconnectTimer();
             }
           }
         });
@@ -307,6 +357,10 @@ function ClientChat() {
       if (operatorTypingTimeoutRef.current) {
         clearTimeout(operatorTypingTimeoutRef.current);
       }
+      // Clear auto-disconnect timer
+      if (autoDisconnectTimeoutRef.current) {
+        clearTimeout(autoDisconnectTimeoutRef.current);
+      }
       
       // Don't disconnect the socket, just remove the handlers
       const currentSocket = getClientSocket();
@@ -377,6 +431,11 @@ function ClientChat() {
     
     if (!isConnected) return;
     
+    // Reset auto-disconnect timer when client types
+    if (e.target.value.trim()) {
+      startAutoDisconnectTimer(); // Reset the timer on typing activity
+    }
+    
     // Send typing indicator
     sendTypingEvent(true, e.target.value);
     
@@ -405,6 +464,9 @@ function ClientChat() {
   };
   
   const handleEndChat = () => {
+    // Clear auto-disconnect timer since user is manually ending chat
+    clearAutoDisconnectTimer();
+    
     const endChatData = {
       userId: clientId,
       roomId,
@@ -434,6 +496,9 @@ function ClientChat() {
   };
   
   const handleCallbackRequest = () => {
+    // Clear auto-disconnect timer since user is requesting callback
+    clearAutoDisconnectTimer();
+    
     const currentRoomId = localStorage.getItem('roomId');
     
     if (!currentRoomId) {
