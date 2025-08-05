@@ -15,6 +15,15 @@ const config = {
     }
   },
   
+  // API settings
+  api: {
+    baseUrl: 'https://gpi.communiq.ge/rest',
+    barrierToken: 'RVrbm9pAkpWrnEmtVdOS-bl7Fe8GGAMz', // Replace with actual token
+    endpoints: {
+      workingHours: '/?r=v1/chat/get-chat-work-hours'
+    }
+  },
+  
   // Application settings
   app: {
     name: 'Chat Application',
@@ -28,11 +37,13 @@ if (typeof window !== 'undefined' && window.localStorage) {
   const savedHost = localStorage.getItem('serverHost');
   const savedPort = localStorage.getItem('serverPort');
   const savedNamespace = localStorage.getItem('serverNamespace');
+  const savedBarrierToken = localStorage.getItem('apiBarrierToken');
   
   // Only apply saved settings if they exist and are not empty
   if (savedHost && savedHost.trim()) config.server.host = savedHost;
   if (savedPort && savedPort.trim()) config.server.port = savedPort;
   if (savedNamespace && savedNamespace.trim()) config.server.namespace = savedNamespace;
+  if (savedBarrierToken && savedBarrierToken.trim()) config.api.barrierToken = savedBarrierToken;
 }
 
 export default config; 

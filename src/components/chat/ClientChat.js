@@ -20,6 +20,8 @@ import { BiExit } from 'react-icons/bi';
 import { RiCloseLine } from 'react-icons/ri';
 import { FiPhoneOff } from 'react-icons/fi';
 import { IoSend } from 'react-icons/io5';
+import { workingHoursService } from '../../services/api/workingHoursService';
+import WorkingHoursModal from '../common/WorkingHoursModal';
 
 function ClientChat() {
   const [messages, setMessages] = useState([]);
@@ -29,10 +31,11 @@ function ClientChat() {
   const [operatorTyping, setOperatorTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showWorkingHoursModal, setShowWorkingHoursModal] = useState(false);
+  const [socketInitialized, setSocketInitialized] = useState(false);
   const messagesEndRef = useRef(null);
   const clientTypingTimeoutRef = useRef(null);
   const operatorTypingTimeoutRef = useRef(null);
-  const socketInitializedRef = useRef(false);
   const autoDisconnectTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const [roomId, setRoomId] = useState(null);
@@ -53,8 +56,50 @@ function ClientChat() {
       return;
     }
 
-    if (socketInitializedRef.current) return;
-    socketInitializedRef.current = true;
+    // Check working hours before initializing chat
+    checkWorkingHoursAndInitialize();
+  }, [clientName, clientNumber, navigate]);
+
+  const checkWorkingHoursAndInitialize = async () => {
+    try {
+      // Get working hours
+      const workingHours = await workingHoursService.getWorkingHours();
+      
+      // Check if current time is within working hours
+      const hoursCheck = workingHoursService.isWithinWorkingHours(workingHours);
+      
+      if (hoursCheck.isWithinHours) {
+        // Within working hours - proceed with chat initialization
+        const timeoutId = initializeSocket();
+        
+        // Clean up timeout on unmount
+        return () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        };
+      } else {
+        // Outside working hours - show modal
+        setShowWorkingHoursModal(true);
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('Error checking working hours:', error);
+      // On error, proceed with chat (fail-safe)
+      const timeoutId = initializeSocket();
+      
+      return () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
+    }
+  };
+
+  const initializeSocket = () => {
+    if (socketInitialized) return;
+    setSocketInitialized(true);
+    setIsLoading(true);
 
     // Define message handler function
     const handleNewMessage = (message) => {
@@ -151,12 +196,16 @@ function ClientChat() {
       if (sessionData.feedbackProcessed) {
         // Cleanup and redirect regardless of success, as the feedback process is complete.
         console.log(`Feedback process finished (success: ${sessionData.success}), cleaning up and redirecting.`);
+        
+
+        
         // Reset component state
         setMessages([]);
         setHasOperator(false);
         setOperatorInfo(null);
         setRoomId(null);
         setIsConnected(false);
+        setSocketInitialized(false);
         // Navigate to login
         navigate('/client/login');
 
@@ -280,10 +329,12 @@ function ClientChat() {
       }
     }, 5000);
     
+    return connectionTimeout;
+  };
+
+  useEffect(() => {
     // Clean up on unmount
     return () => {
-      clearTimeout(connectionTimeout);
-      
       // Clear any pending typing timeouts
       if (clientTypingTimeoutRef.current) {
         clearTimeout(clientTypingTimeoutRef.current);
@@ -303,7 +354,7 @@ function ClientChat() {
         currentSocket.off('connect_error');
       }
     };
-  }, [clientName, clientNumber, clientId, clientPolice, navigate]);
+  }, []);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -311,6 +362,8 @@ function ClientChat() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+  
+
   
   // Handle sending a message
   const handleSendMessage = (e) => {
@@ -535,6 +588,8 @@ function ClientChat() {
     );
   }
   
+
+  
   return (
     <div className="h-full w-full flex flex-col">
       <div className="w-full max-w-md mx-auto bg-white rounded-lg shadow-xl overflow-hidden flex flex-col h-full">
@@ -694,6 +749,15 @@ function ClientChat() {
             </div>
           </div>
         )}
+
+        {/* Working Hours Modal */}
+        <WorkingHoursModal
+          isOpen={showWorkingHoursModal}
+          onClose={() => {
+            setShowWorkingHoursModal(false);
+            navigate('/client/login');
+          }}
+        />
       </div>
     </div>
   );
