@@ -33,6 +33,7 @@ function ClientChat() {
   const clientTypingTimeoutRef = useRef(null);
   const operatorTypingTimeoutRef = useRef(null);
   const socketInitializedRef = useRef(false);
+  const autoDisconnectTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const [roomId, setRoomId] = useState(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -135,6 +136,9 @@ function ClientChat() {
           }
         });
         
+        // Check if timer should be started based on last message
+        checkLastMessageAndManageTimer(updatedMessages);
+        
         return updatedMessages;
       });
     };
@@ -197,6 +201,9 @@ function ClientChat() {
         }));
         
         setMessages(processedMessages);
+        
+        // Check if timer should be started based on last message
+        checkLastMessageAndManageTimer(processedMessages);
       }
       
       setIsConnected(true);
@@ -254,6 +261,9 @@ function ClientChat() {
       }));
       
       setMessages(processedMessages);
+      
+      // Check if timer should be started based on last message
+      checkLastMessageAndManageTimer(processedMessages);
     }
     
     // Update operator info if available
@@ -281,6 +291,9 @@ function ClientChat() {
       if (operatorTypingTimeoutRef.current) {
         clearTimeout(operatorTypingTimeoutRef.current);
       }
+      
+      // Clear auto-disconnect timer
+      clearAutoDisconnectTimer();
       
       // Don't disconnect the socket, just remove the handlers
       const currentSocket = getClientSocket();
@@ -334,6 +347,10 @@ function ClientChat() {
     // Send the actual message to the server
     sendClientMessage(inputMessage.trim(), currentRoomId);
     
+    // Clear auto-disconnect timer since client is sending a message (last message will be from client)
+    clearAutoDisconnectTimer();
+    console.log('[AutoDisconnect] Timer cleared because client sent a message');
+    
     // Clear input
     setInputMessage('');
 
@@ -378,10 +395,82 @@ function ClientChat() {
     }
   };
   
-  const handleEndChat = () => {
+  // Clear auto-disconnect timer
+  const clearAutoDisconnectTimer = () => {
+    if (autoDisconnectTimeoutRef.current) {
+      clearTimeout(autoDisconnectTimeoutRef.current);
+      autoDisconnectTimeoutRef.current = null;
+      console.log('[AutoDisconnect] Timer cleared');
+    }
+  };
+
+  // Check if last message is from operator and manage timer accordingly
+  const checkLastMessageAndManageTimer = (messages) => {
+    if (messages.length > 0) {
+      const currentClientId = sessionStorage.getItem('clientId');
+      const lastMessage = messages[messages.length - 1];
+      const isLastMessageFromOperator = lastMessage.sentByOperator || 
+        (lastMessage.senderId !== currentClientId && lastMessage.senderId);
+      
+      if (isLastMessageFromOperator) {
+        console.log('[AutoDisconnect] Last message is from operator, starting auto-disconnect timer');
+        startAutoDisconnectTimer();
+      } else {
+        console.log('[AutoDisconnect] Last message is from client, clearing auto-disconnect timer');
+        clearAutoDisconnectTimer();
+      }
+    }
+  };
+
+  // Start auto-disconnect timer (5 minutes)
+  const startAutoDisconnectTimer = () => {
+    clearAutoDisconnectTimer(); // Clear any existing timer first
+    
+    autoDisconnectTimeoutRef.current = setTimeout(() => {
+      console.log('[AutoDisconnect] 5 minutes of inactivity - auto disconnecting client');
+      handleAutoDisconnect(); 
+    }, 5 * 60 * 1000); // 5 minutes in milliseconds
+    
+    console.log('[AutoDisconnect] Timer started - will be auto-disconnect in 5 minutes');
+  };
+
+  // Handle automatic disconnect due to inactivity
+  const handleAutoDisconnect = () => {
+    console.log('[AutoDisconnect] Executing auto-disconnect');
+    
+    const currentRoomId = roomId || sessionStorage.getItem('roomId');
+    
+    if (!currentRoomId) {
+      console.error('[AutoDisconnect] Cannot auto-disconnect: room ID not available');
+      return;
+    }
+    
     const endChatData = {
       userId: clientId,
-      roomId,
+      roomId: currentRoomId,
+      userType: 'client'
+    };
+    
+    sendClientEndChat(endChatData);
+    
+    // Show feedback modal instead of immediately ending chat
+    setShowFeedbackModal(true);
+  };
+
+  const handleEndChat = () => {
+    // Clear auto-disconnect timer since user is manually ending chat
+    clearAutoDisconnectTimer();
+    
+    const currentRoomId = roomId || sessionStorage.getItem('roomId');
+    
+    if (!currentRoomId) {
+      console.error('Cannot end chat: room ID not available');
+      return;
+    }
+    
+    const endChatData = {
+      userId: clientId,
+      roomId: currentRoomId,
       userType: 'client'
     };
     
@@ -408,6 +497,9 @@ function ClientChat() {
   };
   
   const handleCallbackRequest = () => {
+    // Clear auto-disconnect timer since user is requesting callback
+    clearAutoDisconnectTimer();
+    
     const currentRoomId = sessionStorage.getItem('roomId');
     
     if (!currentRoomId) {

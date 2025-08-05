@@ -11,15 +11,15 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/operator/login" replace />} />
 
-      {/* <Route path="/client/login" element={<ClientLogin />} /> */}
-      {/* <Route 
+      <Route path="/client/login" element={<ClientLogin />} />
+      <Route 
         path="/client/chat" 
         element={
           <PrivateRoute type="client">
             <ClientChat />
           </PrivateRoute>
         } 
-      /> */}
+      />
       <Route path="/operator/login" element={<OperatorLogin />} />
       <Route 
         path="/operator/dashboard" 
