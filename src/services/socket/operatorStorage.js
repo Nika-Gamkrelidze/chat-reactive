@@ -112,9 +112,6 @@ class OperatorStorage {
         sentByOperator: message.senderId === this.operatorId
       }].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       
-      // Scroll to bottom after state update
-      setTimeout(scrollToBottom, 0);
-      
       return {
         ...this.messages,
         [clientId]: updatedClientMessages
@@ -139,6 +136,39 @@ class OperatorStorage {
     this.saveToStorage();
   }
   
+  // Clear data for a specific client (chat messages and client info)
+  clearClientData(clientId) {
+    if (!clientId) {
+      console.warn('Cannot clear client data: clientId is required');
+      return false;
+    }
+    
+    let dataCleared = false;
+    
+    // Remove client messages
+    if (this.messages[clientId]) {
+      delete this.messages[clientId];
+      console.log(`Cleared messages for client ${clientId}`);
+      dataCleared = true;
+    }
+    
+    // Remove client info
+    if (this.clients[clientId]) {
+      delete this.clients[clientId];
+      console.log(`Cleared client info for client ${clientId}`);
+      dataCleared = true;
+    }
+    
+    if (dataCleared) {
+      this.saveToStorage();
+      console.log(`Successfully cleaned up data for client ${clientId}`);
+    } else {
+      console.log(`No data found to clear for client ${clientId}`);
+    }
+    
+    return dataCleared;
+  }
+
   // Clear all data
   clear() {
     this.operatorId = null;

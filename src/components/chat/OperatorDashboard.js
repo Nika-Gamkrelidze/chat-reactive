@@ -263,6 +263,17 @@ function OperatorDashboard() {
     // Define handler for client ending chat
     clientChatClosedHandlerRef.current = (closedClientId) => {
       console.log('Handling client_ended_chat for client ID:', closedClientId);
+      
+      // Clear chat messages for the closed client from local state
+      setMessages(prevMessages => {
+        const updatedMessages = { ...prevMessages };
+        if (updatedMessages[closedClientId]) {
+          delete updatedMessages[closedClientId];
+          console.log(`Cleared chat messages for client ${closedClientId} from UI state`);
+        }
+        return updatedMessages;
+      });
+      
       // Check if the closed client is the currently selected one
       if (selectedClient && selectedClient.id === closedClientId) {
         // Update the selected client state to reflect the closure
@@ -476,6 +487,16 @@ function OperatorDashboard() {
       
       // Update selected client roomStatus
       setSelectedClient(prev => prev ? { ...prev, roomStatus: 'closed' } : null);
+      
+      // Clear chat messages for the closed client immediately (in case server events don't come through)
+      setMessages(prevMessages => {
+        const updatedMessages = { ...prevMessages };
+        if (updatedMessages[selectedClient.id]) {
+          delete updatedMessages[selectedClient.id];
+          console.log(`Immediately cleared chat messages for force-closed client ${selectedClient.id}`);
+        }
+        return updatedMessages;
+      });
       
       operatorStorage.saveToStorage();
     }

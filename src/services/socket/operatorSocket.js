@@ -1,5 +1,6 @@
 import { io } from 'socket.io-client';
 import config from '../../config/env';
+import { operatorStorage as persistentStorage } from './operatorStorage';
 
 let socket = null;
 let messageHandler = null;
@@ -119,6 +120,48 @@ export const operatorStorage = {
     localStorage.removeItem('operatorNumber');
   },
   
+  // Clear data for a specific client (chat messages and remove from lists)
+  clearClientData: function(clientId) {
+    if (!clientId) {
+      console.warn('Cannot clear client data: clientId is required');
+      return false;
+    }
+    
+    let dataCleared = false;
+    
+    // Remove client messages
+    if (this.messages[clientId]) {
+      delete this.messages[clientId];
+      console.log(`Cleared messages for client ${clientId} from local storage`);
+      dataCleared = true;
+    }
+    
+    // Remove from active clients list
+    const activeIndex = this.activeClients.findIndex(c => c.id === clientId);
+    if (activeIndex !== -1) {
+      this.activeClients.splice(activeIndex, 1);
+      console.log(`Removed client ${clientId} from active clients list`);
+      dataCleared = true;
+    }
+    
+    // Remove from pending clients list
+    const pendingIndex = this.pendingClients.findIndex(c => c.id === clientId);
+    if (pendingIndex !== -1) {
+      this.pendingClients.splice(pendingIndex, 1);
+      console.log(`Removed client ${clientId} from pending clients list`);
+      dataCleared = true;
+    }
+    
+    if (dataCleared) {
+      this.saveToStorage();
+      console.log(`Successfully cleaned up local storage data for client ${clientId}`);
+    } else {
+      console.log(`No local storage data found to clear for client ${clientId}`);
+    }
+    
+    return dataCleared;
+  },
+
   // Clear all operator data including login credentials
   clearAll: function() {
     this.clear();
@@ -550,6 +593,11 @@ export const createOperatorSocket = () => {
           console.log(`Client ${data.clientId} not found in activeClients or already closed.`);
         }
 
+        // Clean up chat messages and client data
+        console.log(`Cleaning up data for ended chat: ${data.clientId}`);
+        operatorStorage.clearClientData(data.clientId);
+        persistentStorage.clearClientData(data.clientId);
+
         // If any part of the state actually changed
         if (storageUpdated || listUpdated) {
           console.log('Saving updated storage after client_ended_chat');
@@ -568,6 +616,101 @@ export const createOperatorSocket = () => {
           }
         } else {
            console.log('No updates made for client_ended_chat event.');
+        }
+      }
+    });
+
+    // Handle chat ended acknowledgment (cleanup event)
+    socket.on('chat_ended_ack', (data) => {
+      if (data && data.roomId) {
+        console.log('Chat ended acknowledgment received:', data);
+        
+        // Extract clientId from roomId or find client by roomId
+        let clientId = null;
+        
+        // Try to find client by roomId in active clients
+        const client = operatorStorage.activeClients.find(c => c.roomId === data.roomId);
+        if (client) {
+          clientId = client.id;
+        } else {
+          // Try to find in persistent storage
+          const persistentClients = persistentStorage.clients;
+          for (const [id, clientData] of Object.entries(persistentClients)) {
+            if (clientData.roomId === data.roomId) {
+              clientId = id;
+              break;
+            }
+          }
+        }
+        
+        if (clientId) {
+          console.log(`Found client ${clientId} for room ${data.roomId}, cleaning up data`);
+          
+          // Clean up chat messages and client data
+          operatorStorage.clearClientData(clientId);
+          persistentStorage.clearClientData(clientId);
+          
+          // Update UI if handlers are available
+          if (clientListHandler && typeof clientListHandler === 'function') {
+            clientListHandler(operatorStorage.activeClients);
+          }
+          
+          if (clientChatClosedHandler && typeof clientChatClosedHandler === 'function') {
+            clientChatClosedHandler(clientId);
+          }
+        } else {
+          console.log(`Could not find client for room ${data.roomId} in chat_ended_ack`);
+        }
+      }
+    });
+
+    // Handle ask for feedback event (chat ending process)
+    socket.on('ask_for_feedback', (data) => {
+      if (data && data.roomId) {
+        console.log('Ask for feedback received:', data);
+        
+        // Extract clientId from roomId or find client by roomId
+        let clientId = null;
+        
+        // Try to find client by roomId in active clients
+        const client = operatorStorage.activeClients.find(c => c.roomId === data.roomId);
+        if (client) {
+          clientId = client.id;
+        } else {
+          // Try to find in persistent storage
+          const persistentClients = persistentStorage.clients;
+          for (const [id, clientData] of Object.entries(persistentClients)) {
+            if (clientData.roomId === data.roomId) {
+              clientId = id;
+              break;
+            }
+          }
+        }
+        
+        if (clientId) {
+          console.log(`Found client ${clientId} for room ${data.roomId}, preparing for cleanup`);
+          
+          // Mark client as preparing to close (optional - you can customize this behavior)
+          const activeIndex = operatorStorage.activeClients.findIndex(c => c.id === clientId);
+          if (activeIndex !== -1) {
+            operatorStorage.activeClients[activeIndex].status = 'ending';
+            operatorStorage.saveToStorage();
+          }
+          
+          // Clean up chat messages and client data (feedback process started)
+          operatorStorage.clearClientData(clientId);
+          persistentStorage.clearClientData(clientId);
+          
+          // Update UI if handlers are available
+          if (clientListHandler && typeof clientListHandler === 'function') {
+            clientListHandler(operatorStorage.activeClients);
+          }
+          
+          if (clientChatClosedHandler && typeof clientChatClosedHandler === 'function') {
+            clientChatClosedHandler(clientId);
+          }
+        } else {
+          console.log(`Could not find client for room ${data.roomId} in ask_for_feedback`);
         }
       }
     });
