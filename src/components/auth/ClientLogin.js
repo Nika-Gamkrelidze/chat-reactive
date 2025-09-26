@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { initClientSocket, setClientSessionHandler } from '../../services/socket/clientSocket';
+import { workingHoursService } from '../../services/api/workingHoursService';
+import WorkingHoursModal from '../common/WorkingHoursModal';
 import { FaUser, FaShieldAlt, FaPhone, FaRegCommentDots } from 'react-icons/fa';
 
 function ClientLogin() {
@@ -12,6 +14,7 @@ function ClientLogin() {
   const [inputErrors, setInputErrors] = useState({ name: '', police: '', number: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [sessionReceived, setSessionReceived] = useState(false);
+  const [showWorkingHoursModal, setShowWorkingHoursModal] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
@@ -23,6 +26,15 @@ function ClientLogin() {
     setSessionReceived(false);
     
     try {
+      // Check working hours before attempting socket connection
+      const workingHours = await workingHoursService.getWorkingHours();
+      const hoursCheck = workingHoursService.isWithinWorkingHours(workingHours);
+      if (!hoursCheck.isWithinHours) {
+        setShowWorkingHoursModal(true);
+        setIsLoading(false);
+        return;
+      }
+
       setClientSessionHandler((sessionData) => {
         console.log('Client session data received:', sessionData);
         
@@ -151,7 +163,7 @@ function ClientLogin() {
             </div>
             <div>
               <h2 className="text-base font-semibold text-gray-800">გამარჯობა</h2>
-              <p className="text-xs text-gray-500">ჩვენ 24/7-ზე ხელმისაწვდომნი ვართ</p>
+              <p className="text-xs text-gray-500">ჩათი მუშაობს 10:00-დან 18:00-მდე</p>
             </div>
           </div>
         </div>
@@ -250,6 +262,12 @@ function ClientLogin() {
         <div className="text-center text-xs text-gray-500 pt-4 mt-auto">
           © 2024 Created with <span role="img" aria-label="heart">♥</span> by CommuniQ
         </div>
+
+        {/* Working Hours Modal */}
+        <WorkingHoursModal
+          isOpen={showWorkingHoursModal}
+          onClose={() => setShowWorkingHoursModal(false)}
+        />
       </div>
     </div>
   );
