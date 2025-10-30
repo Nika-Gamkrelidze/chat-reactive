@@ -32,6 +32,7 @@ function ClientChat() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showWorkingHoursModal, setShowWorkingHoursModal] = useState(false);
+  const [nonWorkMessage, setNonWorkMessage] = useState('');
   const [socketInitialized, setSocketInitialized] = useState(false);
   const messagesEndRef = useRef(null);
   const clientTypingTimeoutRef = useRef(null);
@@ -80,6 +81,8 @@ function ClientChat() {
         };
       } else {
         // Outside working hours - show modal
+        const msg = workingHours[hoursCheck.currentDay]?.nonWorkHoursMessage;
+        if (msg) setNonWorkMessage(msg);
         setShowWorkingHoursModal(true);
         setIsLoading(false);
       }
@@ -757,6 +760,7 @@ function ClientChat() {
             setShowWorkingHoursModal(false);
             navigate('/client/login');
           }}
+          message={nonWorkMessage}
         />
       </div>
     </div>

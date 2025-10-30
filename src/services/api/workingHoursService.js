@@ -6,13 +6,13 @@ class WorkingHoursService {
     this.barrierToken = config.api.barrierToken;
     // Default working hours (09:00 to 18:00, Monday to Friday)
     this.defaultWorkingHours = {
-      monday: { start: '11:00', end: '18:00', isWorkingDay: true },
-      tuesday: { start: '09:00', end: '18:00', isWorkingDay: true },
-      wednesday: { start: '09:00', end: '18:00', isWorkingDay: true },
-      thursday: { start: '09:00', end: '18:00', isWorkingDay: true },
-      friday: { start: '09:00', end: '18:00', isWorkingDay: true },
-      saturday: { start: '09:00', end: '18:00', isWorkingDay: false },
-      sunday: { start: '09:00', end: '18:00', isWorkingDay: false }
+      monday: { start: '11:00', end: '18:00', isWorkingDay: true, nonWorkHoursMessage: 'გთხოვთ, გაითვალისწინოთ, რომ ონლაინ ჩატი ხელმისაწვდომია ყოველდღე 10:00-დან 18:00-მდე.\n\nარასამუშაო საათებში შეგიძლიათ დაუკავშირდეთ ჩვენი მხარდაჭერის გუნდს ნომერზე: 032 2 505 111\n\nPlease note that our live chat is available daily from 10:00 AM to 6:00 PM. Outside of these hours, you can contact our support team at 032 2 505 111' },
+      tuesday: { start: '09:00', end: '18:00', isWorkingDay: true, nonWorkHoursMessage: 'გთხოვთ, გაითვალისწინოთ, რომ ონლაინ ჩატი ხელმისაწვდომია ყოველდღე 10:00-დან 18:00-მდე.\n\nარასამუშაო საათებში შეგიძლიათ დაუკავშირდეთ ჩვენი მხარდაჭერის გუნდს ნომერზე: 032 2 505 111\n\nPlease note that our live chat is available daily from 10:00 AM to 6:00 PM. Outside of these hours, you can contact our support team at 032 2 505 111' },
+      wednesday: { start: '09:00', end: '18:00', isWorkingDay: true, nonWorkHoursMessage: 'გთხოვთ, გაითვალისწინოთ, რომ ონლაინ ჩატი ხელმისაწვდომია ყოველდღე 10:00-დან 18:00-მდე.\n\nარასამუშაო საათებში შეგიძლიათ დაუკავშირდეთ ჩვენი მხარდაჭერის გუნდს ნომერზე: 032 2 505 111\n\nPlease note that our live chat is available daily from 10:00 AM to 6:00 PM. Outside of these hours, you can contact our support team at 032 2 505 111' },
+      thursday: { start: '09:00', end: '18:00', isWorkingDay: true, nonWorkHoursMessage: 'გთხოვთ, გაითვალისწინოთ, რომ ონლაინ ჩატი ხელმისაწვდომია ყოველდღე 10:00-დან 18:00-მდე.\n\nარასამუშაო საათებში შეგიძლიათ დაუკავშირდეთ ჩვენი მხარდაჭერის გუნდს ნომერზე: 032 2 505 111\n\nPlease note that our live chat is available daily from 10:00 AM to 6:00 PM. Outside of these hours, you can contact our support team at 032 2 505 111' },
+      friday: { start: '09:00', end: '18:00', isWorkingDay: true, nonWorkHoursMessage: 'გთხოვთ, გაითვალისწინოთ, რომ ონლაინ ჩატი ხელმისაწვდომია ყოველდღე 10:00-დან 18:00-მდე.\n\nარასამუშაო საათებში შეგიძლიათ დაუკავშირდეთ ჩვენი მხარდაჭერის გუნდს ნომერზე: 032 2 505 111\n\nPlease note that our live chat is available daily from 10:00 AM to 6:00 PM. Outside of these hours, you can contact our support team at 032 2 505 111' },
+      saturday: { start: '09:00', end: '18:00', isWorkingDay: false, nonWorkHoursMessage: 'გთხოვთ, გაითვალისწინოთ, რომ ონლაინ ჩატი ხელმისაწვდომია ყოველდღე 10:00-დან 18:00-მდე.\n\nარასამუშაო საათებში შეგიძლიათ დაუკავშირდეთ ჩვენი მხარდაჭერის გუნდს ნომერზე: 032 2 505 111\n\nPlease note that our live chat is available daily from 10:00 AM to 6:00 PM. Outside of these hours, you can contact our support team at 032 2 505 111' },
+      sunday: { start: '09:00', end: '18:00', isWorkingDay: false, nonWorkHoursMessage: 'გთხოვთ, გაითვალისწინოთ, რომ ონლაინ ჩატი ხელმისაწვდომია ყოველდღე 10:00-დან 18:00-მდე.\n\nარასამუშაო საათებში შეგიძლიათ დაუკავშირდეთ ჩვენი მხარდაჭერის გუნდს ნომერზე: 032 2 505 111\n\nPlease note that our live chat is available daily from 10:00 AM to 6:00 PM. Outside of these hours, you can contact our support team at 032 2 505 111' }
     };
   }
 

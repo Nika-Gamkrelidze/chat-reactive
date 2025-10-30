@@ -15,10 +15,30 @@ function ClientLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionReceived, setSessionReceived] = useState(false);
   const [showWorkingHoursModal, setShowWorkingHoursModal] = useState(false);
+  const [nonWorkMessage, setNonWorkMessage] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
   
+  // Show working-hours modal immediately on page load if outside working hours
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const workingHours = await workingHoursService.getWorkingHours();
+        const hoursCheck = workingHoursService.isWithinWorkingHours(workingHours);
+        if (isMounted && !hoursCheck.isWithinHours) {
+          const msg = workingHours[hoursCheck.currentDay]?.nonWorkHoursMessage;
+          if (msg) setNonWorkMessage(msg);
+          setShowWorkingHoursModal(true);
+        }
+      } catch (err) {
+        // Fail silently; do not block UI if check fails
+      }
+    })();
+    return () => { isMounted = false; };
+  }, []);
+
   const attemptLogin = useCallback(async (loginName, loginNumber, loginPolice) => {
     setGeneralError('');
     setInputErrors({ name: '', police: '', number: '' });
@@ -30,6 +50,8 @@ function ClientLogin() {
       const workingHours = await workingHoursService.getWorkingHours();
       const hoursCheck = workingHoursService.isWithinWorkingHours(workingHours);
       if (!hoursCheck.isWithinHours) {
+        const msg = workingHours[hoursCheck.currentDay]?.nonWorkHoursMessage;
+        if (msg) setNonWorkMessage(msg);
         setShowWorkingHoursModal(true);
         setIsLoading(false);
         return;
@@ -267,6 +289,7 @@ function ClientLogin() {
         <WorkingHoursModal
           isOpen={showWorkingHoursModal}
           onClose={() => setShowWorkingHoursModal(false)}
+          message={nonWorkMessage}
         />
       </div>
     </div>

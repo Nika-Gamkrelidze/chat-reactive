@@ -2,12 +2,12 @@ import React from 'react';
 import { RiCloseLine } from 'react-icons/ri';
 import { FaClock } from 'react-icons/fa';
 
-function WorkingHoursModal({ isOpen, onClose }) {
+function WorkingHoursModal({ isOpen, onClose, message }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
+      <div className="bg-white w-full h-full rounded-none p-6 shadow-xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
@@ -25,23 +25,10 @@ function WorkingHoursModal({ isOpen, onClose }) {
         </div>
 
         {/* Working Hours Message */}
-        <div className="mb-6">
+        <div className="mb-6 flex-1 overflow-y-auto">
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-            {/* Georgian Text */}
-            <div className="mb-4">
-              <p className="text-orange-700 text-sm mb-2 leading-relaxed">
-                გთხოვთ, გაითვალისწინოთ, რომ ონლაინ ჩატი ხელმისაწვდომია ყოველდღე 10:00-დან 18:00-მდე.
-              </p>
-              <p className="text-orange-700 text-sm leading-relaxed">
-                არასამუშაო საათებში შეგიძლიათ დაუკავშირდეთ ჩვენი მხარდაჭერის გუნდს ნომერზე: <span className="font-semibold">032 2 505 111</span>
-              </p>
-            </div>
-            
-            {/* English Text */}
-            <div className="border-t border-orange-200 pt-4">
-              <p className="text-orange-700 text-sm leading-relaxed">
-                Please note that our live chat is available daily from 10:00 AM to 6:00 PM. Outside of these hours, you can contact our support team at <span className="font-semibold">032 2 505 111</span>
-              </p>
+            <div className="text-orange-700 text-sm leading-relaxed whitespace-pre-line">
+              {message || 'გთხოვთ, გაითვალისწინოთ, რომ ონლაინ ჩატი ხელმისაწვდომია ყოველდღე 10:00-დან 18:00-მდე.\n\nარასამუშაო საათებში შეგიძლიათ დაუკავშირდეთ ჩვენი მხარდაჭერის გუნდს ნომერზე: 032 2 505 111\n\nPlease note that our live chat is available daily from 10:00 AM to 6:00 PM. Outside of these hours, you can contact our support team at 032 2 505 111'}
             </div>
           </div>
         </div>
