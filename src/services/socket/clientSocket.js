@@ -6,6 +6,12 @@ let socket = null;
 let messageHandler = null;
 let sessionHandler = null;
 
+// Track early-queue system message suppression
+let operatorJoined = false;
+let pendingBusyMessage = null; // Can be a single message object or an array of messages
+let pendingBusyTimer = null;
+const BUSY_MESSAGE_DELAY_MS = 2000; // Delay window to see if an operator joins
+
 // Debug flag
 const DEBUG_SOCKET = true;
 
@@ -190,6 +196,16 @@ export const createClientSocket = () => {
     socket.on('operator_joined', (data) => {
       console.log('Operator joined:', data);
       if (data.operator) {
+        // Mark operator as joined
+        operatorJoined = true;
+
+        // Cancel pending busy system message if any
+        if (pendingBusyTimer) {
+          clearTimeout(pendingBusyTimer);
+          pendingBusyTimer = null;
+          pendingBusyMessage = null;
+        }
+
         clientStorage.updateFromSession({
           operator: data.operator,
           roomId: data.roomId
@@ -212,6 +228,14 @@ export const createClientSocket = () => {
       // Clear existing data first
       clientStorage.clear();
       
+      // Reset suppression state for a fresh session
+      operatorJoined = !!data.operator;
+      if (pendingBusyTimer) {
+        clearTimeout(pendingBusyTimer);
+        pendingBusyTimer = null;
+      }
+      pendingBusyMessage = null;
+
       // Update storage with new session data
       clientStorage.updateFromSession(data);
       
@@ -240,16 +264,75 @@ export const createClientSocket = () => {
       // Skip if no message handler
       if (!messageHandler || typeof messageHandler !== 'function') return;
       
-      // Process messages
-      if (Array.isArray(data)) {
-        // Handle array of messages - send as single update
-        messageHandler(data);
-      } else if (data.messages && Array.isArray(data.messages)) {
-        // Handle message object with messages array - send as single update
-        messageHandler(data.messages);
-      } else if (data.text || data.messageId) {
-        // Single message object
-        messageHandler(data);
+      // Helper to detect the initial system "busy" message
+      const isBusySystemMessage = (msg) => {
+        if (!msg || typeof msg !== 'object') return false;
+        if (msg.type !== 'system') return false;
+        if (!msg.text || typeof msg.text !== 'string') return false;
+        // Heuristic: message comes from system and indicates all operators are busy (Georgian text or generic keyword)
+        const text = msg.text.toLowerCase();
+        return (
+          msg.senderId === 'system' &&
+          (text.includes('ყველა ოპერატორი დაკავებულია') ||
+           text.includes('operators are busy') ||
+           text.includes('მალე გიპასუხებთ'))
+        );
+      };
+
+      // Process messages with optional suppression
+      const forward = (payload) => {
+        if (Array.isArray(payload) && payload.length === 0) return;
+        messageHandler(payload);
+      };
+
+      // Normalize to array for processing
+      let incoming = Array.isArray(data)
+        ? data
+        : (data?.messages && Array.isArray(data.messages))
+          ? data.messages
+          : (data && (data.text || data.messageId))
+            ? [data]
+            : [];
+
+      if (!operatorJoined && incoming.length > 0) {
+        // Split out busy system messages for potential delay
+        const delayed = [];
+        const immediate = [];
+        for (const msg of incoming) {
+          if (isBusySystemMessage(msg)) {
+            delayed.push(msg);
+          } else {
+            immediate.push(msg);
+          }
+        }
+
+        // Forward non-busy messages immediately
+        if (immediate.length > 0) {
+          forward(immediate.length === 1 ? immediate[0] : immediate);
+        }
+
+        // If we have a busy message and none pending, schedule it
+        if (delayed.length > 0) {
+          // Use the first busy message; duplicates within window are ignored
+          if (!pendingBusyTimer) {
+            pendingBusyMessage = delayed.length === 1 ? delayed[0] : delayed;
+            pendingBusyTimer = setTimeout(() => {
+              // If still no operator joined, forward the busy message now
+              if (!operatorJoined && pendingBusyMessage) {
+                forward(pendingBusyMessage);
+              }
+              pendingBusyMessage = null;
+              pendingBusyTimer = null;
+            }, BUSY_MESSAGE_DELAY_MS);
+          }
+        }
+
+        return; // Handled
+      }
+
+      // Default behavior: forward as-is
+      if (incoming.length > 0) {
+        forward(incoming.length === 1 ? incoming[0] : incoming);
       }
     });
     
@@ -532,6 +615,14 @@ export const cleanupClientSocket = () => {
     sessionHandler = null;
   }
   
+  // Clear pending suppression state
+  if (pendingBusyTimer) {
+    clearTimeout(pendingBusyTimer);
+    pendingBusyTimer = null;
+  }
+  pendingBusyMessage = null;
+  operatorJoined = false;
+
   // Clear storage
   clientStorage.clear();
 };
