@@ -130,7 +130,8 @@ function ClientLogin() {
     if (nameFromUrl && numberFromUrl && policeFromUrl && !isLoading) {
       console.log('Found client name, number, and police in URL, attempting auto-login.');
       setName(nameFromUrl);
-      setNumber(numberFromUrl);
+      // Sanitize and limit phone number to 9 digits
+      setNumber((numberFromUrl || '').replace(/\D/g, '').slice(0, 9));
       setPolice(policeFromUrl);
       attemptLogin(nameFromUrl, numberFromUrl, policeFromUrl);
     }
@@ -258,9 +259,13 @@ function ClientLogin() {
                   id="number"
                   value={number}
                   onChange={(e) => {
-                    setNumber(e.target.value);
+                    const sanitized = (e.target.value || '').replace(/\D/g, '').slice(0, 9);
+                    setNumber(sanitized);
                     setInputErrors(prev => ({ ...prev, number: '' }));
                   }}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={9}
                   className={`w-full pl-10 pr-3 py-2 border ${inputErrors.number ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-1 ${inputErrors.number ? 'focus:ring-red-500 focus:border-red-500' : 'focus:ring-primary-400 focus:border-primary-400'} transition-all outline-none text-sm`}
                   placeholder="ტელეფონის ნომერი"
                   disabled={isLoading}
