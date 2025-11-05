@@ -185,7 +185,7 @@ function ClientLogin() {
             </div>
             <div>
               <h2 className="text-base font-semibold text-gray-800">გამარჯობა</h2>
-              <p className="text-xs text-gray-500">ჩათი მუშაობს 10:00-დან 18:00-მდე</p>
+              {/* <p className="text-xs text-gray-500">ჩათი მუშაობს 10:00-დან 18:00-მდე</p> */}
             </div>
           </div>
         </div>
