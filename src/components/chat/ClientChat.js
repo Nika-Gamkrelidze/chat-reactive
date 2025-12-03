@@ -548,6 +548,18 @@ function ClientChat() {
     // Cleanup and navigation are handled in handleSessionUpdate after feedback_submitted event
   };
 
+  // Handle cancelling feedback: do not send, clean up, and redirect to login
+  const handleCancelFeedback = () => {
+    // Ensure any timers are cleared
+    clearAutoDisconnectTimer();
+    // Clean up socket and session storage
+    cleanupClientSocket();
+    // Close modal (optional since we're navigating)
+    setShowFeedbackModal(false);
+    // Navigate to client login
+    navigate('/client/login');
+  };
+
   const handleShowFeedbackModal = () => {  
     setShowFeedbackModal(true);
   };
@@ -732,7 +744,7 @@ function ClientChat() {
               {/* Submit Button */}
               <div className="flex justify-end space-x-2">
                 <button
-                  onClick={() => setShowFeedbackModal(false)}
+                  onClick={handleCancelFeedback}
                   className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
                 >
                   გაუქმება
