@@ -11,6 +11,8 @@ let typingHandler = null;
 
 // Debug flag
 const DEBUG_SOCKET = true;
+let pendingOperatorJoinPayload = null;
+let lastOperatorJoinPayload = null;
 
 // Operator storage to maintain state across the application
 export const operatorStorage = {
@@ -164,6 +166,13 @@ export const createOperatorSocket = () => {
     // Handle connection events
     socket.on('connect', () => {
       console.log(`Operator connected to server with ID: ${socket.id}`);
+      if (pendingOperatorJoinPayload) {
+        lastOperatorJoinPayload = pendingOperatorJoinPayload;
+        pendingOperatorJoinPayload = null;
+      }
+      if (lastOperatorJoinPayload) {
+        socket.emit('operator-join', lastOperatorJoinPayload);
+      }
     });
     
     socket.on('disconnect', (reason) => {
@@ -174,62 +183,39 @@ export const createOperatorSocket = () => {
       console.error('Operator socket connection error:', error);
     });
     
-    // Handle session establishment
-    socket.on('session', (data) => {
-      console.log('Operator session established with data:', data);
-      console.log('DEBUG: Checking metadata in session data:', data?.activeRooms?.map(r => r.client?.metadata), data?.activeClients?.map(c => c.metadata));
-      
-      const { operator, activeRooms, activeClients: sessionActiveClients } = data;
+    socket.on('operator-join-response', (response) => {
+      console.log('Operator join response:', response);
 
-      // Update storage with new session data - handle flattened structure
-      operatorStorage.updateFromSession({
-        operator: {
-          id: operator?.id,
-          name: operator?.name,
-          number: operator?.number,
-          status: operator?.status
-        }
-      });
-      
-      // Update socket auth with new operator ID if available
-      if (operator?.id) {
-        socket.auth.userId = operator.id;
+      if (response?.status === 'success' && response?.data) {
+        operatorStorage.updateFromSession({
+          operator: {
+            id: response.data.operatorId,
+            name: response.data.operatorName,
+            number: sessionStorage.getItem('operatorNumber'),
+            status: response.data?.status
+          },
+          operatorId: response.data.operatorId
+        });
       }
-      
-      // Call session handler if defined
+
       if (sessionHandler && typeof sessionHandler === 'function') {
-        sessionHandler({ operator, activeRooms, activeClients: sessionActiveClients, pendingClients: data.pendingClients });
+        sessionHandler({
+          status: response?.status,
+          message: response?.message,
+          operator: response?.data
+            ? {
+                id: response.data.operatorId,
+                name: response.data.operatorName,
+                number: sessionStorage.getItem('operatorNumber'),
+                status: response.data?.status
+              }
+            : null
+        });
       }
     });
-    
-    // Handle session reconnection
-    socket.on('session-reconnect', (data) => {
-      console.log('Operator session reconnected with data:', data);
-      console.log('DEBUG: Checking metadata in session-reconnect data:', data?.activeRooms?.map(r => r.client?.metadata), data?.activeClients?.map(c => c.metadata));
 
-      const { operator, activeRooms, activeClients: sessionActiveClients } = data;
-      
-      // Update storage with reconnection data
-      operatorStorage.updateFromSession({
-        operator: operator ? { id: operator.id, name: operator.name, number: operator.number, status: operator.status } : null,
-        operatorId: operator?.id
-      });
-
-      // Update socket auth with new operator ID if available
-      if (operator?.id) {
-        socket.auth.userId = operator.id;
-      }
-      
-      // Call session handler if defined
-      if (sessionHandler && typeof sessionHandler === 'function') {
-        sessionHandler({ operator, activeRooms, activeClients: sessionActiveClients, pendingClients: data.pendingClients, messages: data.messages });
-      }
-    });
-    
-    // Handle room assignment
-    socket.on('room_assigned', (data) => {
-      console.log('Room assigned to operator:', data);
-      console.log('DEBUG: Checking metadata in room_assigned data:', data?.client?.metadata);
+    socket.on('client-connected', (data) => {
+      console.log('Client connected:', data);
       
       if (data && data.client && data.roomId && data.client.id) {
         // Initialize clients object if needed
@@ -238,7 +224,7 @@ export const createOperatorSocket = () => {
         }
 
         const clientId = data.client.id;
-        const currentRoomStatus = data.roomStatus || 'active';
+        const currentRoomStatus = data.room?.status || data.roomStatus || 'active';
 
         // Add or update client in clients storage
         operatorStorage.clients[clientId] = {
@@ -324,59 +310,48 @@ export const createOperatorSocket = () => {
       }
     });
     
-    // Handle client list updates
-    socket.on('active_clients', (clients) => {
-      if (DEBUG_SOCKET) {
-        console.log('Operator received active clients update:', clients);
-        console.log('DEBUG: Checking metadata in active_clients data:', clients?.map(c => c.metadata));
-      }
-      
-      // Initialize nested clients storage if needed
-      if (!operatorStorage.clients) {
-        operatorStorage.clients = {};
-      }
-      
-      // Update clients in storage
-      clients.forEach(client => {
-        if (!client.id) return; // Skip if client has no ID
-        const existingClient = operatorStorage.clients[client.id];
-        operatorStorage.clients[client.id] = {
-          ...client,
-          // Ensure roomStatus is consistent, prioritize it, default to 'active'
-          roomStatus: client.roomStatus || (existingClient ? existingClient.roomStatus : 'active') 
-        };
-      });
-      
-      // Update top-level active clients list, ensuring roomStatus consistency
-      operatorStorage.activeClients = clients.map(client => {
-        if (!client.id) return null; // Handle potential malformed client data
-        const existingClient = operatorStorage.activeClients.find(c => c.id === client.id);
-        return {
-          ...client,
-          // Prioritize roomStatus from incoming data, fallback to existing, default to 'active'
-          roomStatus: client.roomStatus || (existingClient ? existingClient.roomStatus : 'active') 
-        };
-      }).filter(Boolean); // Filter out any null entries from malformed data
-      
-      operatorStorage.saveToStorage();
-      
-      // Call client list handler if defined
-      if (clientListHandler && typeof clientListHandler === 'function') {
-        clientListHandler(clients);
+    socket.on('queue-status', (response) => {
+      console.log('Received queue status:', response);
+
+      if (response?.data?.clients) {
+        operatorStorage.pendingClients = response.data.clients;
+        operatorStorage.saveToStorage();
+
+        if (clientQueueHandler && typeof clientQueueHandler === 'function') {
+          clientQueueHandler(response.data.clients);
+        }
       }
     });
-    
-    // Handle client queue updates
-    socket.on('client_queue', (data) => {
-      console.log('Received client queue:', data);
-      
-      if (data && data.queue) {
-        operatorStorage.pendingClients = data.queue;
-        operatorStorage.saveToStorage();
-        
-        if (clientQueueHandler && typeof clientQueueHandler === 'function') {
-          clientQueueHandler(data.queue);
+
+    socket.on('my-rooms-response', (response) => {
+      console.log('Received my rooms response:', response);
+
+      if (response?.status !== 'success' || !Array.isArray(response?.data?.rooms)) return;
+
+      const rooms = response.data.rooms;
+      const activeClients = rooms
+        .filter(room => room.client)
+        .map(room => ({
+          ...room.client,
+          roomId: room.id,
+          roomStatus: room.status || 'active'
+        }));
+
+      operatorStorage.activeClients = activeClients;
+      operatorStorage.messages = rooms.reduce((acc, room) => {
+        if (room.client && room.client.id && Array.isArray(room.messages)) {
+          acc[room.client.id] = room.messages;
         }
+        return acc;
+      }, {});
+      operatorStorage.saveToStorage();
+
+      if (clientListHandler && typeof clientListHandler === 'function') {
+        clientListHandler(activeClients);
+      }
+
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({ activeRooms: rooms, activeClients });
       }
     });
     
@@ -414,155 +389,102 @@ export const createOperatorSocket = () => {
       }
     });
     
-    // Handle client typing indicator
-    socket.on('client_typing', (data) => {
-      console.log('Operator received client_typing event:', data);
-      if (typingHandler && typeof typingHandler === 'function') {
-        // Pass the full data: { roomId, userId, isTyping, timestamp }
-        typingHandler(data);
+    socket.on('message-response', (response) => {
+      if (response?.status !== 'ok' || !response?.data) return;
+      if (messageHandler && typeof messageHandler === 'function') {
+        messageHandler(response.data);
       }
     });
 
-    // Handle chat status updates
-    socket.on('chat_status_update', (data) => {
+    // Handle typing indicator
+    socket.on('typing', (data) => {
+      if (data?.from !== 'client') return;
+
+      const clientId = Object.values(operatorStorage.clients || {}).find(
+        client => client.roomId === data.roomId
+      )?.id;
+
+      if (typingHandler && typeof typingHandler === 'function' && clientId) {
+        typingHandler({
+          roomId: data.roomId,
+          userId: clientId,
+          isTyping: data.isTyping
+        });
+      }
+    });
+
+    const updateClientRoomStatus = (clientId, roomStatus) => {
+      if (!clientId) return;
+
       let storageUpdated = false;
       let listUpdated = false;
-      let updatedActiveClientsList = operatorStorage.activeClients; // Start with current list
+      let updatedActiveClientsList = operatorStorage.activeClients;
 
-      if (data && data.clientId && data.roomStatus) {
-        // Update client roomStatus in storage
-        if (operatorStorage.clients && operatorStorage.clients[data.clientId]) {
-          if (operatorStorage.clients[data.clientId].roomStatus !== data.roomStatus) {
-            operatorStorage.clients[data.clientId].roomStatus = data.roomStatus;
-            storageUpdated = true;
-          }
+      if (operatorStorage.clients && operatorStorage.clients[clientId]) {
+        if (operatorStorage.clients[clientId].roomStatus !== roomStatus) {
+          operatorStorage.clients[clientId].roomStatus = roomStatus;
+          storageUpdated = true;
         }
-        
-        // Update active clients list
-        const currentActiveClients = operatorStorage.activeClients;
-        const clientIndex = currentActiveClients.findIndex(c => c.id === data.clientId);
+      }
 
-        if (clientIndex !== -1 && currentActiveClients[clientIndex].roomStatus !== data.roomStatus) {
-          updatedActiveClientsList = currentActiveClients.map((client, index) => 
-            index === clientIndex 
-              ? { ...client, roomStatus: data.roomStatus } 
-              : client
-          );
-          operatorStorage.activeClients = updatedActiveClientsList;
-          listUpdated = true;
-        } 
+      const currentActiveClients = operatorStorage.activeClients;
+      const clientIndex = currentActiveClients.findIndex(c => c.id === clientId);
 
-        if (storageUpdated || listUpdated) {
-          operatorStorage.saveToStorage();
-          // Notify client list handler with the updated list
-          if (clientListHandler && typeof clientListHandler === 'function') {
-            clientListHandler(updatedActiveClientsList);
-          }
-        } else {
-          console.log(`Chat status update for ${data.clientId} did not change state.`);
+      if (clientIndex !== -1 && currentActiveClients[clientIndex].roomStatus !== roomStatus) {
+        updatedActiveClientsList = currentActiveClients.map((client, index) =>
+          index === clientIndex ? { ...client, roomStatus } : client
+        );
+        operatorStorage.activeClients = updatedActiveClientsList;
+        listUpdated = true;
+      }
+
+      if (storageUpdated || listUpdated) {
+        operatorStorage.saveToStorage();
+        if (clientListHandler && typeof clientListHandler === 'function') {
+          clientListHandler(updatedActiveClientsList);
         }
+      }
+    };
+
+    socket.on('client-disconnected-temporarily', (data) => {
+      console.log('Client temporarily disconnected:', data);
+      const clientId = data?.clientId;
+      updateClientRoomStatus(clientId, 'paused');
+    });
+
+    socket.on('client-disconnected-permanently', (data) => {
+      console.log('Client permanently disconnected:', data);
+      const clientId = data?.clientId;
+      updateClientRoomStatus(clientId, data?.roomStatus || 'paused');
+    });
+
+    socket.on('client-reconnected', (data) => {
+      console.log('Client reconnected:', data);
+      const clientId = data?.clientId;
+      updateClientRoomStatus(clientId, 'active');
+    });
+
+    socket.on('chat-ended', (data) => {
+      const clientId = Object.values(operatorStorage.clients || {}).find(
+        client => client.roomId === data?.roomId
+      )?.id;
+
+      updateClientRoomStatus(clientId, 'closed');
+
+      if (clientChatClosedHandler && typeof clientChatClosedHandler === 'function' && clientId) {
+        clientChatClosedHandler(clientId);
       }
     });
 
-    // Handle client disconnection (sets roomStatus to 'closed')
-    socket.on('client_disconnected', (data) => {
-      if (data && data.clientId) {
-        console.log('Client disconnected:', data.clientId);
-        let storageUpdated = false;
-        let listUpdated = false;
-        let updatedActiveClientsList = operatorStorage.activeClients;
-
-        // Update client roomStatus in clients storage
-        if (operatorStorage.clients && operatorStorage.clients[data.clientId]) {
-          if (operatorStorage.clients[data.clientId].roomStatus !== 'closed') {
-            operatorStorage.clients[data.clientId].roomStatus = 'closed';
-            storageUpdated = true;
+    socket.on('status-update-response', (response) => {
+      if (response?.status !== 'success') return;
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({
+          operator: {
+            ...operatorStorage.operator,
+            status: response?.data?.newStatus
           }
-        }
-
-        // Update active clients list
-        const currentActiveClients = operatorStorage.activeClients;
-        const clientIndex = currentActiveClients.findIndex(c => c.id === data.clientId);
-
-        if (clientIndex !== -1 && currentActiveClients[clientIndex].roomStatus !== 'closed') {
-          updatedActiveClientsList = currentActiveClients.map((client, index) => 
-            index === clientIndex 
-              ? { ...client, roomStatus: 'closed' } 
-              : client
-          );
-          operatorStorage.activeClients = updatedActiveClientsList;
-          listUpdated = true;
-        }
-
-        if (storageUpdated || listUpdated) {
-          operatorStorage.saveToStorage();
-          // Notify client list handler
-          if (clientListHandler && typeof clientListHandler === 'function') {
-            clientListHandler(updatedActiveClientsList);
-          }
-        } else {
-          console.log(`Client disconnect event for ${data.clientId} did not change state.`);
-        }
-      }
-    });
-
-    // Handle client ending chat (sets roomStatus to 'closed')
-    socket.on('chat_ended', (data) => {
-      if (data && data.clientId) {
-        console.log('Client ended chat:', data);
-
-        let storageUpdated = false;
-        let listUpdated = false;
-        let updatedActiveClientsList = operatorStorage.activeClients; // Start with current
-
-        // Update client roomStatus in clients storage (nested object)
-        if (operatorStorage.clients && operatorStorage.clients[data.clientId]) {
-          if (operatorStorage.clients[data.clientId].roomStatus !== 'closed') {
-             operatorStorage.clients[data.clientId].roomStatus = 'closed';
-             storageUpdated = true;
-             console.log(`Updated roomStatus in operatorStorage.clients for ${data.clientId}`);
-          }
-        }
-
-        // Update active clients list (simple array)
-        const currentActiveClients = operatorStorage.activeClients; // Get current list reference
-        const clientIndex = currentActiveClients.findIndex(c => c.id === data.clientId);
-
-        // Only update if found and not already closed
-        if (clientIndex !== -1 && currentActiveClients[clientIndex].roomStatus !== 'closed') {
-           console.log(`Found client ${data.clientId} in activeClients at index ${clientIndex}, updating status.`);
-           // Create the updated list using map
-           updatedActiveClientsList = currentActiveClients.map((client, index) =>
-              index === clientIndex
-                ? { ...client, roomStatus: 'closed' } // Update the specific client
-                : client
-           );
-           // Reassign the storage list to the new array reference
-           operatorStorage.activeClients = updatedActiveClientsList;
-           listUpdated = true;
-        } else {
-          console.log(`Client ${data.clientId} not found in activeClients or already closed.`);
-        }
-
-        // If any part of the state actually changed
-        if (storageUpdated || listUpdated) {
-          console.log('Saving updated storage after client_ended_chat');
-          operatorStorage.saveToStorage();
-
-          // Notify the main client list handler with the *explicitly updated* list
-          if (clientListHandler && typeof clientListHandler === 'function') {
-            console.log('Calling clientListHandler with updated list:', updatedActiveClientsList);
-            clientListHandler(updatedActiveClientsList); // Pass the result directly
-          }
-
-          // Notify the specific handler for this event
-          if (clientChatClosedHandler && typeof clientChatClosedHandler === 'function') {
-             console.log('Calling clientChatClosedHandler');
-            clientChatClosedHandler(data.clientId);
-          }
-        } else {
-           console.log('No updates made for client_ended_chat event.');
-        }
+        });
       }
     });
   }
@@ -580,16 +502,25 @@ export const initOperatorSocket = (name, number, operatorId = null) => {
     socket.disconnect();
   }
   
+  const storedOperatorId = operatorId || sessionStorage.getItem('operatorId');
+
   // Set authentication data
   socket.auth = {
-    name: name,
-    number: number,
-    userId: operatorId || sessionStorage.getItem('operatorId'),
-    type: "operator"
+    userId: storedOperatorId || undefined,
+    type: "operator",
+    name,
+    number
   };
-  
-  console.log(`Connecting to socket server as operator with name: ${name} and number: ${number} and userId: ${operatorId || 'null'}`);
-  
+
+  pendingOperatorJoinPayload = {
+    operatorId: storedOperatorId || undefined,
+    operatorName: name,
+    operatorNumber: number
+  };
+  lastOperatorJoinPayload = pendingOperatorJoinPayload;
+
+  console.log(`Connecting to socket server as operator with name: ${name} and number: ${number} and userId: ${storedOperatorId || 'null'}`);
+
   // Connect to the server
   socket.connect();
   
@@ -620,14 +551,21 @@ export const reconnectOperatorSocket = () => {
     
     // Set authentication data with stored credentials
     socket.auth = {
-      name: name,
-      number: number,
-      userId: operatorId, // Include operatorId if available
-      type: "operator"
+      userId: operatorId || undefined,
+      type: "operator",
+      name,
+      number
     };
-    
+
+    pendingOperatorJoinPayload = {
+      operatorId: operatorId || undefined,
+      operatorName: name,
+      operatorNumber: number
+    };
+  lastOperatorJoinPayload = pendingOperatorJoinPayload;
+
     console.log(`Reconnecting to socket server as operator with name: ${name}, number: ${number}, and userId: ${operatorId || 'null'}`);
-    
+
     // Connect to the server
     socket.connect();
     
@@ -711,7 +649,7 @@ export const disconnectOperatorSocket = () => {
 // Request client queue
 export const requestClientQueue = () => {
   if (socket && socket.connected) {
-    // socket.emit('get_client_queue');
+    socket.emit('get-queue-status');
     return true;
   }
   return false;
@@ -720,7 +658,12 @@ export const requestClientQueue = () => {
 // Request active clients
 export const requestActiveClients = () => {
   if (socket && socket.connected) {
-    // socket.emit('get_active_clients');
+    const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+    if (operatorId) {
+      socket.emit('get-my-rooms', { operatorId });
+    } else {
+      socket.emit('get-my-rooms', {});
+    }
     return true;
   }
   return false;
@@ -758,15 +701,12 @@ export const sendMessageToClient = (clientId, text, roomId) => {
   };
   
   // Just emit the message to server - no temporary message creation
-  socket.emit('send_message', messageData);
+  socket.emit('send-message', messageData);
 };
 
 // Accept client from queue
 export const acceptClient = (clientId) => {
-  if (socket && socket.connected) {
-    socket.emit('accept_client', { clientId });
-    return true;
-  }
+  console.warn('acceptClient is not supported by the current backend API.', clientId);
   return false;
 };
 
@@ -784,10 +724,8 @@ export const sendOperatorTypingEvent = (roomId, isTyping) => {
     }
 
     socket.emit('typing', {
-        roomId,
-        userId: operatorId,
-        userType: 'operator',
-        isTyping
+      roomId,
+      isTyping
     });
   }
 };

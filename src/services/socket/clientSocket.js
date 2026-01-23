@@ -7,6 +7,9 @@ let sessionHandler = null;
 
 // Debug flag
 const DEBUG_SOCKET = true;
+let pendingConnectPayload = null;
+let pendingReconnectPayload = null;
+let lastReconnectPayload = null;
 
 // Chat storage to maintain state across the application
 export const clientStorage = {
@@ -22,10 +25,10 @@ export const clientStorage = {
     if (sessionData.client) {
       this.client = sessionData.client;
     }
-    if (sessionData.operator) {
+    if ('operator' in sessionData) {
       this.operator = sessionData.operator;
-      this.hasOperator = true;
-      this.operatorInfo = sessionData.operator;
+      this.hasOperator = Boolean(sessionData.operator);
+      this.operatorInfo = sessionData.operator || null;
     }
     if (sessionData.roomId) {
       this.roomId = sessionData.roomId;
@@ -176,6 +179,23 @@ export const createClientSocket = () => {
     // Handle connection events
     socket.on('connect', () => {
       console.log(`Client connected to server with ID: ${socket.id}`);
+
+      if (pendingReconnectPayload) {
+        socket.emit('client-reconnect', pendingReconnectPayload);
+        pendingReconnectPayload = null;
+        return;
+      }
+
+      if (pendingConnectPayload) {
+        socket.emit('client-connect', pendingConnectPayload);
+        pendingConnectPayload = null;
+      }
+    });
+
+    socket.on('reconnect', () => {
+      if (lastReconnectPayload) {
+        socket.emit('client-reconnect', lastReconnectPayload);
+      }
     });
     
     socket.on('disconnect', (reason) => {
@@ -186,50 +206,102 @@ export const createClientSocket = () => {
       console.error('Client socket connection error:', error);
     });
     
-    // Add this new event handler before the session event
-    socket.on('operator_joined', (data) => {
-      console.log('Operator joined:', data);
-      if (data.operator) {
-        clientStorage.updateFromSession({
-          operator: data.operator,
-          roomId: data.roomId
+    socket.on('connection-status', (response) => {
+      console.log('Client connection status:', response);
+
+      clientStorage.clear();
+
+      const authName = socket.auth?.name || sessionStorage.getItem('clientName');
+      const authNumber = socket.auth?.number || sessionStorage.getItem('clientNumber');
+      const authClientId = socket.auth?.userId || sessionStorage.getItem('clientId');
+
+      const operator = response?.data?.operatorId
+        ? { id: response.data.operatorId, name: response.data.operatorName }
+        : null;
+
+      const roomId = response?.data?.roomId || null;
+      const clientId = response?.data?.clientId || authClientId || socket.id || null;
+
+      if (clientId) {
+        sessionStorage.setItem('clientId', clientId);
+        lastReconnectPayload = { clientId };
+      }
+      if (authName) sessionStorage.setItem('clientName', authName);
+      if (authNumber) sessionStorage.setItem('clientNumber', authNumber);
+
+      const client = clientId ? { id: clientId, name: authName, number: authNumber } : null;
+
+      clientStorage.updateFromSession({
+        client,
+        operator,
+        roomId
+      });
+
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({
+          status: response.status,
+          message: response.message,
+          client,
+          operator,
+          roomId,
+          queuePosition: response?.data?.queuePosition ?? null
         });
-        
-        // Call session handler if defined
+      }
+    });
+
+    socket.on('reconnection-status', (response) => {
+      console.log('Client reconnection status:', response);
+
+      if (response?.requiresNewSession) {
         if (sessionHandler && typeof sessionHandler === 'function') {
-          sessionHandler({
-            operator: data.operator,
-            roomId: data.roomId
-          });
+          sessionHandler({ requiresNewSession: true, status: response.status, message: response.message });
+        }
+        return;
+      }
+
+      const operator = response?.operatorId
+        ? { id: response.operatorId, name: response.operatorName }
+        : null;
+      const roomId = response?.roomId || null;
+
+      if (operator || roomId) {
+        clientStorage.updateFromSession({ operator, roomId });
+      }
+
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({
+          status: response.status,
+          message: response.message,
+          client: clientStorage.client,
+          operator,
+          roomId,
+          queuePosition: response?.queuePosition ?? null
+        });
+      }
+    });
+
+    socket.on('operator-assigned', (data) => {
+      console.log('Operator assigned:', data);
+
+      if (data?.operatorId) {
+        const operator = { id: data.operatorId, name: data.operatorName };
+        clientStorage.updateFromSession({ operator, roomId: data.roomId });
+
+        if (sessionHandler && typeof sessionHandler === 'function') {
+          sessionHandler({ operator, roomId: data.roomId });
         }
       }
     });
-    
-    // Handle session establishment
-    socket.on('session', (data) => {
-      console.log('Client session established with data:', data);
-      
-      // Clear existing data first
-      clientStorage.clear();
-      
-      // Update storage with new session data
-      clientStorage.updateFromSession(data);
-      
-      // Update socket auth with new client ID if available
-      if (data.client && data.client.id) {
-        socket.auth.clientId = data.client.id;
-        sessionStorage.setItem('clientId', data.client.id);
-      }
-      
-      // Store client name and number
-      if (socket.auth.name && socket.auth.number) {
-        sessionStorage.setItem('clientName', socket.auth.name);
-        sessionStorage.setItem('clientNumber', socket.auth.number);
-      }
-      
-      // Call session handler if defined
+
+    socket.on('added-to-queue', (data) => {
+      console.log('Client added to queue:', data);
+
       if (sessionHandler && typeof sessionHandler === 'function') {
-        sessionHandler(data);
+        sessionHandler({
+          status: 'queued',
+          queuePosition: data?.position ?? null,
+          message: data?.message
+        });
       }
     });
     
@@ -253,46 +325,41 @@ export const createClientSocket = () => {
       }
     });
     
-    // Handle typing indicator
-    socket.on('operator_typing', (data) => {
+    socket.on('message-response', (response) => {
+      if (response?.status !== 'ok' || !response?.data) return;
       if (messageHandler && typeof messageHandler === 'function') {
-        // Pass the full data object including roomId, userId, isTyping
+        messageHandler(response.data);
+      }
+    });
+
+    // Handle typing indicator
+    socket.on('typing', (data) => {
+      if (data?.from !== 'operator') return;
+      if (messageHandler && typeof messageHandler === 'function') {
         messageHandler({
           type: 'typing',
-          ...data // Contains isTyping, roomId, userId
+          ...data
         });
       }
     });
 
-    socket.on('session-reconnect', (data) => {
-      console.log('Client session reconnected with data:', data);
-      
-      // Update storage with reconnected session data
-      clientStorage.updateFromSession(data);
-      
-      // Call session handler if defined
+    socket.on('end-chat-response', (response) => {
+      console.log('Client end-chat response:', response);
+    });
+
+    socket.on('chat-ended', (data) => {
+      console.log('Chat ended:', data);
       if (sessionHandler && typeof sessionHandler === 'function') {
-        sessionHandler(data);
+        sessionHandler({ chatEnded: true, ...data });
       }
     });
 
-    socket.on('ask_for_feedback', () => {
-      // Use the existing session handler to communicate back to the component
+    socket.on('feedback-received', (response) => {
+      console.log('Feedback received:', response);
       if (sessionHandler && typeof sessionHandler === 'function') {
-        sessionHandler({ showFeedback: true });
+        sessionHandler({ feedbackProcessed: true, success: response?.status === 'ok' });
       }
-    });
-
-    socket.on('feedback_submitted', (data) => {
-      console.log('Received feedback_submitted event:', data);
-      // Use the session handler to notify the component
-      if (sessionHandler && typeof sessionHandler === 'function') {
-        // Notify component *before* cleanup
-        sessionHandler({ feedbackProcessed: true, success: data.success });
-
-        // Cleanup socket regardless of success
-        cleanupClientSocket();
-      }
+      cleanupClientSocket();
     });
   }
   
@@ -322,20 +389,28 @@ export const initClientSocket = (name, number, police, clientId = null) => {
   
   // Store user credentials including police
   clientStorage.storeUserCredentials(name, number, police);
-  
+
+  const storedClientId = clientId || sessionStorage.getItem('clientId');
+
   // Set authentication data
   socket.auth = {
-    name: name,
-    number: number,
-    userId: clientId || sessionStorage.getItem('clientId'),
+    userId: storedClientId || undefined,
     type: 'client',
+    name,
+    number
+  };
+
+  pendingConnectPayload = {
+    userId: storedClientId || undefined,
+    name,
+    number,
     metadata: {
-      police: police
+      police
     }
   };
-  
-  console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and userId: ${clientId || 'null'}`);
-  
+
+  console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and userId: ${storedClientId || 'null'}`);
+
   // Connect to the server
   socket.connect();
   
@@ -357,7 +432,7 @@ export const reconnectClientSocket = () => {
   console.log('Attempting to reconnect with stored credentials:', { clientId, name, number, police });
   
   // If we have stored credentials, reconnect
-  if (name && number && police) {
+  if (name && number && police && clientId) {
     // Create socket instance if not already created
     if (!socket) {
       createClientSocket();
@@ -365,15 +440,17 @@ export const reconnectClientSocket = () => {
     
     // Set authentication data with stored credentials
     socket.auth = {
-      name: name,
-      number: number,
-      userId: clientId, // Include clientId if available
+      userId: clientId || undefined,
       type: "client",
-      metadata: {
-        police: police
-      }
+      name,
+      number
     };
-    
+
+    pendingReconnectPayload = {
+      clientId
+    };
+    lastReconnectPayload = { clientId };
+
     console.log(`Reconnecting to socket server as client with name: ${name}, number: ${number}, police: ${police}, and userId: ${clientId || 'null'}`);
     
     // Connect to the server
@@ -385,6 +462,17 @@ export const reconnectClientSocket = () => {
   }
   
   return null;
+};
+
+export const requestClientReconnect = (clientId) => {
+  if (socket && socket.connected) {
+    const storedClientId = clientId || sessionStorage.getItem('clientId');
+    if (!storedClientId) return false;
+    lastReconnectPayload = { clientId: storedClientId };
+    socket.emit('client-reconnect', { clientId: storedClientId });
+    return true;
+  }
+  return false;
 };
 
 // Set a message handler after initialization
@@ -445,7 +533,7 @@ export const sendClientMessage = (text, roomId) => {
   };
   
   // Just emit the message to server - no temporary message creation
-  socket.emit('send_message', messageData);
+  socket.emit('send-message', messageData);
 };
 
 // Send typing indicator event to the server
@@ -461,8 +549,6 @@ export const sendTypingEvent = (isTyping) => {
 
     socket.emit('typing', {
       roomId,
-      userId: clientId,
-      userType: 'client',
       isTyping
     });
   }
@@ -482,7 +568,11 @@ export const clearClientData = () => {
 // Send end chat notification to server
 export const sendClientEndChat = (clientData) => {
   if (socket && socket.connected) {
-    socket.emit('end_chat', clientData);
+    if (!clientData?.roomId) {
+      console.error('Cannot end chat: room ID missing.');
+      return;
+    }
+    socket.emit('end-chat', { roomId: clientData.roomId });
     // Note: We don't disconnect here anymore as we need to wait for feedback submission
   }
 };
@@ -491,28 +581,20 @@ export const sendClientEndChat = (clientData) => {
 export const sendClientFeedback = (feedbackData) => {
   if (socket && socket.connected) {
     const currentRoomId = clientStorage.roomId || sessionStorage.getItem('roomId');
-    const currentClientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
 
     if (!currentRoomId) {
       console.error("Cannot send feedback: Room ID not found.");
       return;
     }
-    if (!currentClientId) {
-        console.error("Cannot send feedback: Client ID not found.");
-        return;
-    }
 
     // feedbackData should contain { score, comment }
     const payload = {
-        // Rename score to rating
-        rating: feedbackData.score, 
+        rating: feedbackData.score,
         comment: feedbackData.comment,
-        roomId: currentRoomId,
-        // Add clientId
-        clientId: currentClientId
+        roomId: currentRoomId
     };
 
-    socket.emit('client_feedback', payload);
+    socket.emit('submit-feedback', payload);
   }
 };
 

@@ -412,8 +412,7 @@ function OperatorDashboard() {
     
     if (socket && socket.connected) {
       console.log(`Requesting status change to: ${newStatus}`); // Add log
-      socket.emit('change_status', { 
-        id: operatorStorage.operatorId,
+      socket.emit('operator-status-update', { 
         status: newStatus
       });
       // Update state optimistically, server should confirm via session update if needed
@@ -448,11 +447,10 @@ function OperatorDashboard() {
     
     const socket = getOperatorSocket();
     if (socket && socket.connected) {
-      // Send end_chat event
-      socket.emit('end_chat', {
+      // Send end-chat event
+      socket.emit('end-chat', {
         roomId,
-        userId: operatorStorage.operatorId,
-        userType: 'operator'
+        reason: 'completed'
       });
       
       // Update client roomStatus in active clients list

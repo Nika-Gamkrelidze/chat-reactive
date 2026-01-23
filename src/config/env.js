@@ -1,11 +1,8 @@
-// Environment configuration
 const config = {
-  // Server connection settings
   server: {
     protocol: 'https',
-    // host: '192.168.14.56',
     host: 'chat.communiq.ge',
-    port: '4000', // Empty string for default port
+    port: '4000', 
     namespace: 'namespace1',
     get url() {
       return `${this.protocol}://${this.host}${this.port ? ':' + this.port : ''}`;
@@ -15,7 +12,6 @@ const config = {
     }
   },
   
-  // Application settings
   app: {
     name: 'Chat Application',
     version: '1.0.0',
@@ -23,13 +19,11 @@ const config = {
   }
 };
 
-// Override with localStorage settings if they exist
 if (typeof window !== 'undefined' && window.localStorage) {
   const savedHost = localStorage.getItem('serverHost');
   const savedPort = localStorage.getItem('serverPort');
   const savedNamespace = localStorage.getItem('serverNamespace');
   
-  // Only apply saved settings if they exist and are not empty
   if (savedHost && savedHost.trim()) config.server.host = savedHost;
   if (savedPort && savedPort.trim()) config.server.port = savedPort;
   if (savedNamespace && savedNamespace.trim()) config.server.namespace = savedNamespace;

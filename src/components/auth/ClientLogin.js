@@ -22,13 +22,25 @@ function ClientLogin() {
     try {
       setClientSessionHandler((sessionData) => {
         console.log('Client session data received:', sessionData);
-        
+
+        if (sessionData.status === 'after_hours') {
+          setError(sessionData.message || 'After hours. Please try again later.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (sessionData.status === 'error') {
+          setError(sessionData.message || 'Login failed. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+
         if (sessionData.client) {
           sessionStorage.setItem('clientId', sessionData.client.id);
           sessionStorage.setItem('clientName', loginName);
           sessionStorage.setItem('clientNumber', loginNumber);
           sessionStorage.setItem('clientPolice', loginPolice);
-          
+
           login({
             id: sessionData.client.id,
             name: loginName,
@@ -36,7 +48,7 @@ function ClientLogin() {
             police: loginPolice,
             role: 'client'
           });
-          
+
           console.log('Session received, setting state to navigate to chat...');
           setSessionReceived(true);
         } else {

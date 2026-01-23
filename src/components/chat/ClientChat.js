@@ -11,7 +11,8 @@ import {
   sendClientEndChat,
   sendClientFeedback,
   cleanupClientSocket,
-  isSocketConnected
+  isSocketConnected,
+  requestClientReconnect
 } from '../../services/socket/clientSocket';
 import { MdCallEnd } from 'react-icons/md';
 import { IoMdExit } from 'react-icons/io';
@@ -42,6 +43,7 @@ function ClientChat() {
   const clientName = sessionStorage.getItem('clientName');
   const clientNumber = sessionStorage.getItem('clientNumber');
   const clientId = sessionStorage.getItem('clientId');
+  const clientPolice = sessionStorage.getItem('clientPolice');
   
   useEffect(() => {
     // Redirect to login if no client info
@@ -109,6 +111,11 @@ function ClientChat() {
     const handleSessionUpdate = (sessionData) => {
       console.log('Session update received in ClientChat:', sessionData);
 
+      if (sessionData.requiresNewSession) {
+        navigate('/client/login');
+        return;
+      }
+
       // Handle feedback processed signal
       if (sessionData.feedbackProcessed) {
         // Cleanup and redirect regardless of success, as the feedback process is complete.
@@ -131,6 +138,9 @@ function ClientChat() {
       if (sessionData.operator) {
         setHasOperator(true);
         setOperatorInfo(sessionData.operator);
+      } else if ('operator' in sessionData) {
+        setHasOperator(false);
+        setOperatorInfo(null);
       }
       
       // Update room ID if available
@@ -159,6 +169,11 @@ function ClientChat() {
       }
       
       setIsConnected(true);
+
+      if (sessionData.chatEnded) {
+        setShowFeedbackModal(true);
+        setIsConnected(false);
+      }
     };
     
     // Set message and session handlers
@@ -169,17 +184,13 @@ function ClientChat() {
     if (!isSocketConnected()) {
       // Only initialize socket if not already connected
       console.log('Initializing client socket with:', { clientName, clientNumber, clientId });
-      initClientSocket(clientName, clientNumber, clientId);
+      initClientSocket(clientName, clientNumber, clientPolice, clientId);
     } else {
       console.log('Using existing socket connection');
       setIsLoading(false);
       setIsConnected(true);
       
-      // Request session reconnect data
-      const socket = getClientSocket();
-      if (socket) {
-        socket.emit('request-session-data');
-      }
+      requestClientReconnect(clientId);
     }
     
     // Get current socket instance
@@ -248,7 +259,7 @@ function ClientChat() {
         currentSocket.off('connect_error');
       }
     };
-  }, [clientName, clientNumber, clientId, navigate]);
+  }, [clientName, clientNumber, clientId, clientPolice, navigate]);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -313,14 +324,13 @@ function ClientChat() {
   };
   
   const handleEndChat = () => {
-    const endChatData = {
-      clientId,
-      clientName,
-      clientNumber,
-      roomId
-    };
-    
-    sendClientEndChat(endChatData);
+    const currentRoomId = roomId || sessionStorage.getItem('roomId');
+    if (!currentRoomId) {
+      console.error('Cannot end chat: room ID missing.');
+      return;
+    }
+
+    sendClientEndChat({ roomId: currentRoomId });
     setShowFeedbackModal(true);
   };
   
@@ -333,7 +343,7 @@ function ClientChat() {
     
     sendClientFeedback(feedbackData);
     setShowFeedbackModal(false);
-    // Cleanup and navigation are handled in handleSessionUpdate after feedback_submitted event
+    // Cleanup and navigation are handled in handleSessionUpdate after feedback-received
   };
 
   const handleShowFeedbackModal = () => {  
