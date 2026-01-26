@@ -13,6 +13,20 @@ let typingHandler = null;
 const DEBUG_SOCKET = true;
 let pendingOperatorJoinPayload = null;
 let lastOperatorJoinPayload = null;
+let operatorJoinRetriedWithoutId = false;
+let operatorJoinRetriedWithUrl = false;
+
+const getOperatorParamsFromUrl = () => {
+  if (typeof window === 'undefined') return null;
+
+  const queryParams = new URLSearchParams(window.location.search);
+  const name = queryParams.get('name');
+  const number = queryParams.get('number');
+
+  if (!name || !number) return null;
+
+  return { name, number };
+};
 
 // Operator storage to maintain state across the application
 export const operatorStorage = {
@@ -182,6 +196,43 @@ export const createOperatorSocket = () => {
     socket.on('connect_error', (error) => {
       console.error('Operator socket connection error:', error);
     });
+
+    socket.on('error', (error) => {
+      console.error('Operator socket error:', error);
+
+      if (
+        error?.message === 'Failed to reconnect to operator session' &&
+        !operatorJoinRetriedWithUrl
+      ) {
+        const urlParams = getOperatorParamsFromUrl();
+        if (urlParams) {
+          operatorJoinRetriedWithUrl = true;
+          operatorStorage.clearAll();
+          sessionStorage.removeItem('user');
+          // Retry using URL name/number only (force a fresh session).
+          initOperatorSocket(urlParams.name, urlParams.number, null);
+          return;
+        }
+      }
+
+      if (
+        error?.message === 'Failed to reconnect to operator session' &&
+        lastOperatorJoinPayload?.operatorId &&
+        !operatorJoinRetriedWithoutId
+      ) {
+        operatorJoinRetriedWithoutId = true;
+        sessionStorage.removeItem('operatorId');
+        if (socket?.auth) {
+          socket.auth.userId = undefined;
+        }
+        const retryPayload = {
+          ...lastOperatorJoinPayload,
+          operatorId: undefined
+        };
+        lastOperatorJoinPayload = retryPayload;
+        socket.emit('operator-join', retryPayload);
+      }
+    });
     
     socket.on('operator-join-response', (response) => {
       console.log('Operator join response:', response);
@@ -210,6 +261,100 @@ export const createOperatorSocket = () => {
                 status: response.data?.status
               }
             : null
+        });
+      }
+    });
+
+    socket.on('session-reconnect', (data) => {
+      console.log('Operator session reconnected with data:', data);
+
+      const operatorId = data?.operatorId || data?.operator?.id || null;
+      const operator = data?.operator || {
+        id: operatorId,
+        name: data?.operatorName || null,
+        number: data?.operatorNumber || null,
+        status: data?.status || null
+      };
+
+      if (operatorId) sessionStorage.setItem('operatorId', operatorId);
+      if (operator?.name) sessionStorage.setItem('operatorName', operator.name);
+      if (operator?.number) sessionStorage.setItem('operatorNumber', operator.number);
+
+      operatorStorage.updateFromSession({ operator, operatorId });
+
+      const activeRooms = Array.isArray(data?.activeRooms) ? data.activeRooms : [];
+      const activeClients = activeRooms
+        .filter(room => room.client)
+        .map(room => ({
+          ...room.client,
+          roomId: room.roomId || room.id,
+          roomStatus: room.status || room.roomStatus || 'active'
+        }));
+
+      const messages = activeRooms.reduce((acc, room) => {
+        if (room.client && room.client.id && Array.isArray(room.messages)) {
+          acc[room.client.id] = room.messages;
+        }
+        return acc;
+      }, {});
+
+      operatorStorage.activeClients = activeClients;
+      operatorStorage.messages = messages;
+
+      if (Array.isArray(data?.pendingClients)) {
+        operatorStorage.pendingClients = data.pendingClients;
+      }
+
+      operatorStorage.saveToStorage();
+
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({
+          operator,
+          activeRooms,
+          activeClients,
+          pendingClients: data?.pendingClients || []
+        });
+      }
+    });
+
+    // Backward compatibility: some servers still emit `session`
+    socket.on('session', (data) => {
+      console.log('Operator session established with data:', data);
+
+      operatorStorage.clear();
+
+      const operatorId = data?.operatorId || data?.operator?.id || null;
+      const operator = data?.operator || {
+        id: operatorId,
+        name: data?.operatorName || null,
+        number: data?.operatorNumber || null,
+        status: data?.status || null
+      };
+
+      if (operatorId) sessionStorage.setItem('operatorId', operatorId);
+      if (operator?.name) sessionStorage.setItem('operatorName', operator.name);
+      if (operator?.number) sessionStorage.setItem('operatorNumber', operator.number);
+
+      operatorStorage.updateFromSession({ operator, operatorId });
+
+      if (Array.isArray(data?.activeClients)) {
+        operatorStorage.activeClients = data.activeClients;
+      }
+      if (Array.isArray(data?.pendingClients)) {
+        operatorStorage.pendingClients = data.pendingClients;
+      }
+      if (data?.messages && typeof data.messages === 'object') {
+        operatorStorage.messages = data.messages;
+      }
+
+      operatorStorage.saveToStorage();
+
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({
+          operator,
+          activeClients: data?.activeClients || [],
+          pendingClients: data?.pendingClients || [],
+          messages: data?.messages || null
         });
       }
     });
@@ -515,9 +660,11 @@ export const initOperatorSocket = (name, number, operatorId = null) => {
   pendingOperatorJoinPayload = {
     operatorId: storedOperatorId || undefined,
     operatorName: name,
-    operatorNumber: number
+    operatorNumber: number,
+    number
   };
   lastOperatorJoinPayload = pendingOperatorJoinPayload;
+  operatorJoinRetriedWithoutId = false;
 
   console.log(`Connecting to socket server as operator with name: ${name} and number: ${number} and userId: ${storedOperatorId || 'null'}`);
 
@@ -557,12 +704,14 @@ export const reconnectOperatorSocket = () => {
       number
     };
 
-    pendingOperatorJoinPayload = {
-      operatorId: operatorId || undefined,
-      operatorName: name,
-      operatorNumber: number
-    };
+  pendingOperatorJoinPayload = {
+    operatorId: operatorId || undefined,
+    operatorName: name,
+    operatorNumber: number,
+    number
+  };
   lastOperatorJoinPayload = pendingOperatorJoinPayload;
+  operatorJoinRetriedWithoutId = false;
 
     console.log(`Reconnecting to socket server as operator with name: ${name}, number: ${number}, and userId: ${operatorId || 'null'}`);
 

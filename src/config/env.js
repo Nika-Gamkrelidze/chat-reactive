@@ -1,9 +1,9 @@
 const config = {
   server: {
-    protocol: 'https',
-    host: 'chat.communiq.ge',
+    protocol: 'http',
+    host: '127.0.0.1',
     port: '4000', 
-    namespace: 'namespace1',
+    namespace: 'DEMO',
     get url() {
       return `${this.protocol}://${this.host}${this.port ? ':' + this.port : ''}`;
     },

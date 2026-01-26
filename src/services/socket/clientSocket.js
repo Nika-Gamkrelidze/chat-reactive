@@ -249,6 +249,31 @@ export const createClientSocket = () => {
       }
     });
 
+    // Backward compatibility: some servers still emit `session`
+    socket.on('session', (data) => {
+      console.log('Client session established with data:', data);
+
+      clientStorage.clear();
+      clientStorage.updateFromSession(data);
+
+      if (data?.client?.id) {
+        sessionStorage.setItem('clientId', data.client.id);
+        lastReconnectPayload = { clientId: data.client.id };
+      }
+
+      if (data?.client?.name) sessionStorage.setItem('clientName', data.client.name);
+      if (data?.client?.number) sessionStorage.setItem('clientNumber', data.client.number);
+
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({
+          client: data.client,
+          operator: data.operator || null,
+          roomId: data.roomId || null,
+          messages: data.messages || []
+        });
+      }
+    });
+
     socket.on('reconnection-status', (response) => {
       console.log('Client reconnection status:', response);
 

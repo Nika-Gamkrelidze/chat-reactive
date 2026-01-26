@@ -350,27 +350,6 @@ function ClientChat() {
     setShowFeedbackModal(true);
   };
   
-  const handleCallbackRequest = () => {
-    const currentRoomId = sessionStorage.getItem('roomId');
-    
-    if (!currentRoomId) {
-      console.error('Cannot send callback request: room ID not available');
-      return;
-    }
-
-    const callbackData = {
-      userId: clientId,
-      roomId: currentRoomId,
-      name: clientName,
-      number: clientNumber
-    };
-    
-    sendClientCallbackRequest(callbackData);
-    
-    // Navigate to login
-    navigate('/client/login');
-  };
-  
   // Log operatorTyping state during render
   console.log('[ClientChat] Rendering - operatorTyping:', operatorTyping);
   
