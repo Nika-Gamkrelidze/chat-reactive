@@ -422,15 +422,26 @@ function OperatorDashboard() {
     navigate('/operator/login');
   };
   
-  // Add handler for status toggle (README: status 'active' | 'busy' | 'away' | 'inactive')
   const handleStatusToggle = () => {
+    // Toggle between "available" and "paused"
+    // Backend in this repo expects: socket.emit('operator_status_update', { id, status })
+    // README backend expects:       socket.emit('operator-status-update', { status })
     const newStatus = operatorStatus === 'active' ? 'away' : 'active';
-    
+
     const socket = getOperatorSocket();
-    
+    const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+
     if (socket && socket.connected) {
       console.log(`Requesting status change to: ${newStatus}`);
+
+      // New API (README)
       socket.emit('operator-status-update', { status: newStatus });
+
+      // Existing backend in this repo (underscored event and explicit id)
+      if (operatorId) {
+        socket.emit('operator_status_update', { id: operatorId, status: newStatus });
+      }
+
       setOperatorStatus(newStatus);
     } else {
       console.warn('Cannot change status: socket not connected.');
