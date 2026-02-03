@@ -49,6 +49,11 @@ function OperatorDashboard() {
   const typingHandlerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const selectedClientRef = useRef(null);
+
+  useEffect(() => {
+    selectedClientRef.current = selectedClient;
+  }, [selectedClient]);
 
   // Function to scroll to bottom of messages
   const scrollToBottom = () => {
@@ -136,7 +141,8 @@ function OperatorDashboard() {
       if (!isFromOperator) {
          setActiveClients(prevClients => 
            prevClients.map(client => {
-             if (client.id === clientId && (!selectedClient || selectedClient.id !== clientId)) {
+             const selected = selectedClientRef.current;
+             if (client.id === clientId && (!selected || selected.id !== clientId)) {
                // Increment unread count, initializing if it doesn't exist
                const newUnreadCount = (client.unreadCount || 0) + 1;
                return { ...client, unreadCount: newUnreadCount };
@@ -163,7 +169,8 @@ function OperatorDashboard() {
         }));
 
         // If the currently selected client is no longer in the active list, deselect it
-        if (selectedClient && !updatedClients.some(c => c.id === selectedClient.id)) {
+        const selected = selectedClientRef.current;
+        if (selected && !updatedClients.some(c => c.id === selected.id)) {
           setSelectedClient(null);
         }
         
@@ -259,16 +266,28 @@ function OperatorDashboard() {
     // Define handler for client ending chat
     clientChatClosedHandlerRef.current = (closedClientId) => {
       console.log('Handling client_ended_chat for client ID:', closedClientId);
-      // Check if the closed client is the currently selected one
-      if (selectedClient && selectedClient.id === closedClientId) {
-        // Update the selected client state to reflect the closure
-        setSelectedClient(prevSelectedClient => {
-          if (prevSelectedClient && prevSelectedClient.id === closedClientId) {
-            return { ...prevSelectedClient, roomStatus: 'closed' };
-          }
-          return prevSelectedClient;
+      // If the closed client is currently selected, clear the chat view so old messages don't linger
+      const selected = selectedClientRef.current;
+      if (selected && selected.id === closedClientId) {
+        setInputMessage('');
+        setSelectedClient(null);
+
+        // Remove messages for this client from UI state (optional but matches expected "clear")
+        setMessages(prev => {
+          const next = { ...prev };
+          delete next[closedClientId];
+          return next;
         });
-        // No need to remove from active clients here as clientListHandler already does
+
+        // Also remove from operatorStorage to prevent restoring old messages on refresh
+        try {
+          if (operatorStorage.messages && operatorStorage.messages[closedClientId]) {
+            delete operatorStorage.messages[closedClientId];
+            operatorStorage.saveToStorage();
+          }
+        } catch (e) {
+          // non-fatal
+        }
       }
     };
     
@@ -330,7 +349,7 @@ function OperatorDashboard() {
       setClientChatClosedHandler(null);
       setTypingHandler(null);
     };
-  }, [navigate, selectedClient]);
+  }, [navigate]);
   
   // Handle client selection
   const handleClientSelect = (client) => {

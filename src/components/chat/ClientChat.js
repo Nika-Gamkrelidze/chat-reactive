@@ -121,8 +121,33 @@ function ClientChat() {
     const handleSessionUpdate = (sessionData) => {
       console.log('Session update received in ClientChat:', sessionData);
 
+      const cleanupAndGoToLogin = () => {
+        // Fully wipe persisted client session so ClientLogin won't auto-redirect to chat
+        try {
+          cleanupClientSocket();
+        } catch (e) {
+          // non-fatal
+        }
+        try {
+          // clientStorage.clear() doesn't remove AuthContext user; clear it here too
+          sessionStorage.removeItem('user');
+        } catch (e) {
+          // non-fatal
+        }
+
+        // Reset component state
+        setMessages([]);
+        setHasOperator(false);
+        setOperatorInfo(null);
+        setRoomId(null);
+        setIsConnected(false);
+        setShowFeedbackModal(false);
+
+        navigate('/client/login', { replace: true });
+      };
+
       if (sessionData.requiresNewSession) {
-        navigate('/client/login');
+        cleanupAndGoToLogin();
         return;
       }
 
@@ -130,16 +155,8 @@ function ClientChat() {
       if (sessionData.feedbackProcessed) {
         // Cleanup and redirect regardless of success, as the feedback process is complete.
         console.log(`Feedback process finished (success: ${sessionData.success}), cleaning up and redirecting.`);
-        // Reset component state
-        setMessages([]);
-        setHasOperator(false);
-        setOperatorInfo(null);
-        setRoomId(null);
-        setIsConnected(false);
-        // Navigate to login
-        navigate('/client/login');
-
-        return; // Stop further processing for this event
+        cleanupAndGoToLogin();
+        return;
       }
 
       setIsLoading(false);

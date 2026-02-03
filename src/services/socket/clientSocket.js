@@ -343,6 +343,39 @@ export const createClientSocket = (clientIdForQuery = null) => {
       }
     });
 
+    // Backend emits operator_joined / operator_reconnected (underscore), not operator-assigned.
+    socket.on('operator_joined', (data) => {
+      console.log('Operator joined:', data);
+      if (data?.operator?.id) {
+        const operator = {
+          id: data.operator.id,
+          name: data.operator.name,
+          departmentId: data.operator.departmentId ?? null,
+          status: data.operator.status ?? null
+        };
+        if (data?.roomId) clientStorage.updateFromSession({ operator, roomId: data.roomId });
+        if (sessionHandler && typeof sessionHandler === 'function') {
+          sessionHandler({ operator, roomId: data?.roomId });
+        }
+      }
+    });
+
+    socket.on('operator_reconnected', (data) => {
+      console.log('Operator reconnected:', data);
+      if (data?.operator?.id) {
+        const operator = {
+          id: data.operator.id,
+          name: data.operator.name,
+          departmentId: data.operator.departmentId ?? null,
+          status: data.operator.status ?? null
+        };
+        if (data?.roomId) clientStorage.updateFromSession({ operator, roomId: data.roomId });
+        if (sessionHandler && typeof sessionHandler === 'function') {
+          sessionHandler({ operator, roomId: data?.roomId });
+        }
+      }
+    });
+
     socket.on('added-to-queue', (data) => {
       console.log('Client added to queue:', data);
 
@@ -428,12 +461,20 @@ export const createClientSocket = (clientIdForQuery = null) => {
       }
     });
 
-    socket.on('feedback-received', (response) => {
-      console.log('Feedback received:', response);
+    // Backend requests feedback with ask_for_feedback and acknowledges submission with feedback_submitted.
+    socket.on('ask_for_feedback', (data) => {
+      console.log('Feedback requested:', data);
       if (sessionHandler && typeof sessionHandler === 'function') {
-        sessionHandler({ feedbackProcessed: true, success: response?.status === 'ok' });
+        sessionHandler({ chatEnded: true, ...data });
       }
-      cleanupClientSocket();
+    });
+
+    socket.on('feedback_submitted', (response) => {
+      console.log('Feedback submitted:', response);
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({ feedbackProcessed: true, success: response?.success === true });
+      }
+      // Cleanup is handled by ClientChat to also clear AuthContext's sessionStorage.user
     });
   }
   
@@ -660,20 +701,27 @@ export const sendClientEndChat = (clientData) => {
 export const sendClientFeedback = (feedbackData) => {
   if (socket && socket.connected) {
     const currentRoomId = clientStorage.roomId || sessionStorage.getItem('roomId');
+    const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
 
     if (!currentRoomId) {
       console.error("Cannot send feedback: Room ID not found.");
       return;
     }
+    if (!clientId) {
+      console.error("Cannot send feedback: Client ID not found.");
+      return;
+    }
 
     // feedbackData should contain { score, comment }
     const payload = {
-        rating: feedbackData.score,
-        comment: feedbackData.comment,
-        roomId: currentRoomId
+      roomId: currentRoomId,
+      clientId,
+      rating: feedbackData.score,
+      comment: feedbackData.comment
     };
 
-    socket.emit('submit-feedback', payload);
+    // Backend event name: client_feedback
+    socket.emit('client_feedback', payload);
   }
 };
 
