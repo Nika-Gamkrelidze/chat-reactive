@@ -500,19 +500,164 @@ export const createOperatorSocket = () => {
       }
     });
     
+    // Handle room_assigned event - when a client is assigned to this operator
+    socket.on('room_assigned', (data) => {
+      console.log('Operator received room_assigned event:', data);
+      
+      if (!data || !data.roomId || !data.client || !data.client.id) {
+        console.warn('Invalid room_assigned data:', data);
+        return;
+      }
+      
+      const clientId = data.client.id;
+      const roomId = data.roomId;
+      const clientData = {
+        ...data.client,
+        roomId: roomId,
+        roomStatus: 'active'
+      };
+      
+      // Initialize clients object if needed
+      if (!operatorStorage.clients) {
+        operatorStorage.clients = {};
+      }
+      
+      // Store client data
+      operatorStorage.clients[clientId] = clientData;
+      
+      // Check if client already exists in activeClients
+      const clientIndex = operatorStorage.activeClients.findIndex(c => c.id === clientId);
+      
+      if (clientIndex === -1) {
+        // Add new client to active clients
+        operatorStorage.activeClients.push(clientData);
+      } else {
+        // Update existing client
+        operatorStorage.activeClients[clientIndex] = clientData;
+      }
+      
+      // Initialize or update messages for this client
+      if (!operatorStorage.messages[clientId]) {
+        operatorStorage.messages[clientId] = [];
+      }
+      
+      // Add messages from room_assigned event
+      if (data.messages && Array.isArray(data.messages)) {
+        data.messages.forEach(message => {
+          // Check if message already exists
+          const exists = operatorStorage.messages[clientId].some(
+            m => m.messageId === message.messageId
+          );
+          
+          if (!exists) {
+            const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+            const enhancedMessage = {
+              ...message,
+              clientId: clientId,
+              sentByOperator: message.senderId === operatorId
+            };
+            operatorStorage.messages[clientId].push(enhancedMessage);
+          }
+        });
+        
+        // Sort messages by timestamp
+        operatorStorage.messages[clientId].sort(
+          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+        );
+        
+        // Notify message handler of each new message
+        if (messageHandler && typeof messageHandler === 'function') {
+          const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+          data.messages.forEach(message => {
+            const exists = operatorStorage.messages[clientId].some(
+              m => m.messageId === message.messageId
+            );
+            if (!exists) {
+              messageHandler({
+                ...message,
+                clientId: clientId,
+                sentByOperator: message.senderId === operatorId
+              });
+            }
+          });
+        }
+      }
+      
+      operatorStorage.saveToStorage();
+      
+      // Notify client list handler
+      if (clientListHandler && typeof clientListHandler === 'function') {
+        clientListHandler([...operatorStorage.activeClients]);
+      }
+    });
+    
     // Handle incoming messages
     socket.on('message', (data) => {
       console.log('Operator received message:', data);
+      
+      // Helper function to determine clientId from message
+      const getClientIdFromMessage = (message) => {
+        // Get operatorId with fallback to sessionStorage
+        const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+        
+        // First try: if sender is not operator, sender is the client
+        if (message.senderId && message.senderId !== operatorId) {
+          return message.senderId;
+        }
+        // Second try: if receiver is not operator, receiver is the client
+        if (message.receiverId && message.receiverId !== operatorId) {
+          return message.receiverId;
+        }
+        // Third try: look up clientId from roomId
+        if (message.roomId) {
+          const client = operatorStorage.activeClients.find(c => c.roomId === message.roomId);
+          if (client) return client.id;
+          // Also check operatorStorage.clients
+          if (operatorStorage.clients) {
+            const clientFromStorage = Object.values(operatorStorage.clients).find(c => c.roomId === message.roomId);
+            if (clientFromStorage) return clientFromStorage.id;
+          }
+        }
+        return null;
+      };
       
       if (Array.isArray(data)) {
         // Process each message in the array
         data.forEach(message => {
           if (message.roomId && (message.text || message.messageId)) {
+            const clientId = getClientIdFromMessage(message);
+            if (!clientId) {
+              console.warn('Could not determine clientId for message:', message);
+              return;
+            }
+            
+            // Get operatorId with fallback
+            const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+            
             // Add clientId to the message object for internal routing
             const enhancedMessage = {
               ...message,
-              clientId: message.senderId !== operatorStorage.operatorId ? message.senderId : message.receiverId
+              clientId: clientId,
+              sentByOperator: message.senderId === operatorId
             };
+            
+            // Add message to storage
+            if (!operatorStorage.messages[clientId]) {
+              operatorStorage.messages[clientId] = [];
+            }
+            
+            // Check if message already exists
+            const exists = operatorStorage.messages[clientId].some(
+              m => m.messageId === message.messageId
+            );
+            
+            if (!exists) {
+              operatorStorage.messages[clientId].push(enhancedMessage);
+              operatorStorage.messages[clientId].sort(
+                (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+              );
+              operatorStorage.saveToStorage();
+            }
             
             // Call message handler if defined
             if (messageHandler && typeof messageHandler === 'function') {
@@ -521,11 +666,39 @@ export const createOperatorSocket = () => {
           }
         });
       } else if (data.roomId && (data.text || data.messageId)) {
+        const clientId = getClientIdFromMessage(data);
+        if (!clientId) {
+          console.warn('Could not determine clientId for message:', data);
+          return;
+        }
+        
+        // Get operatorId with fallback
+        const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+        
         // Add clientId to the single message object
         const enhancedMessage = {
           ...data,
-          clientId: data.senderId !== operatorStorage.operatorId ? data.senderId : data.receiverId
+          clientId: clientId,
+          sentByOperator: data.senderId === operatorId
         };
+        
+        // Add message to storage
+        if (!operatorStorage.messages[clientId]) {
+          operatorStorage.messages[clientId] = [];
+        }
+        
+        // Check if message already exists
+        const exists = operatorStorage.messages[clientId].some(
+          m => m.messageId === data.messageId
+        );
+        
+        if (!exists) {
+          operatorStorage.messages[clientId].push(enhancedMessage);
+          operatorStorage.messages[clientId].sort(
+            (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+          );
+          operatorStorage.saveToStorage();
+        }
         
         // Call message handler if defined
         if (messageHandler && typeof messageHandler === 'function') {
@@ -609,7 +782,7 @@ export const createOperatorSocket = () => {
       updateClientRoomStatus(clientId, 'active');
     });
 
-    socket.on('chat-ended', (data) => {
+    socket.on('chat_ended', (data) => {
       const clientId = Object.values(operatorStorage.clients || {}).find(
         client => client.roomId === data?.roomId
       )?.id;
@@ -850,7 +1023,7 @@ export const sendMessageToClient = (clientId, text, roomId) => {
   };
   
   // Just emit the message to server - no temporary message creation
-  socket.emit('send-message', messageData);
+  socket.emit('send_message', messageData);
 };
 
 // Accept client from queue

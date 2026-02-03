@@ -403,22 +403,18 @@ function OperatorDashboard() {
     navigate('/operator/login');
   };
   
-  // Add handler for status toggle
+  // Add handler for status toggle (README: status 'active' | 'busy' | 'away' | 'inactive')
   const handleStatusToggle = () => {
-    // Toggle between 'active' and 'paused'
-    const newStatus = operatorStatus === 'active' ? 'paused' : 'active';
+    const newStatus = operatorStatus === 'active' ? 'away' : 'active';
     
     const socket = getOperatorSocket();
     
     if (socket && socket.connected) {
-      console.log(`Requesting status change to: ${newStatus}`); // Add log
-      socket.emit('operator-status-update', { 
-        status: newStatus
-      });
-      // Update state optimistically, server should confirm via session update if needed
+      console.log(`Requesting status change to: ${newStatus}`);
+      socket.emit('operator-status-update', { status: newStatus });
       setOperatorStatus(newStatus);
     } else {
-        console.warn('Cannot change status: socket not connected.'); // Add warning
+      console.warn('Cannot change status: socket not connected.');
     }
   };
   
@@ -447,9 +443,12 @@ function OperatorDashboard() {
     
     const socket = getOperatorSocket();
     if (socket && socket.connected) {
-      // Send end-chat event
-      socket.emit('end-chat', {
+      // Send end_chat event
+      const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
+      socket.emit('end_chat', {
         roomId,
+        userId: operatorId,
+        userType: 'operator',
         reason: 'completed'
       });
       

@@ -142,10 +142,11 @@ export const clientStorage = {
 };
 
 // Create socket instance without connecting
-export const createClientSocket = () => {
+// README: optional query.clientId for reconnection
+export const createClientSocket = (clientIdForQuery = null) => {
   if (!socket) {
     console.log(`Creating socket instance for client at: ${config.server.namespaceUrl}`);
-    
+    const query = clientIdForQuery ? { clientId: clientIdForQuery } : {};
     socket = io(config.server.namespaceUrl, {
       autoConnect: false,
       reconnection: true,
@@ -153,7 +154,8 @@ export const createClientSocket = () => {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      ...(Object.keys(query).length > 0 && { query })
     });
     
     // Add logging for socket events if debug is enabled
@@ -352,7 +354,31 @@ export const createClientSocket = () => {
         });
       }
     });
-    
+
+    // README: operator-disconnected-temporarily (operator may reconnect within gracePeriod)
+    socket.on('operator-disconnected-temporarily', (data) => {
+      console.log('Operator temporarily disconnected:', data);
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({
+          operatorDisconnected: 'temporarily',
+          message: data?.message,
+          gracePeriod: data?.gracePeriod
+        });
+      }
+    });
+
+    // README: operator-disconnected-permanently
+    socket.on('operator-disconnected-permanently', (data) => {
+      console.log('Operator permanently disconnected:', data);
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({
+          operatorDisconnected: 'permanently',
+          message: data?.message,
+          roomStatus: data?.roomStatus
+        });
+      }
+    });
+
     // Handle incoming messages
     socket.on('message', (data) => {
       console.log('Client received message:', data);
@@ -391,11 +417,11 @@ export const createClientSocket = () => {
       }
     });
 
-    socket.on('end-chat-response', (response) => {
+    socket.on('chat_ended_ack', (response) => {
       console.log('Client end-chat response:', response);
     });
 
-    socket.on('chat-ended', (data) => {
+    socket.on('chat_ended', (data) => {
       console.log('Chat ended:', data);
       if (sessionHandler && typeof sessionHandler === 'function') {
         sessionHandler({ chatEnded: true, ...data });
@@ -427,9 +453,10 @@ export const initClientSocket = (name, number, police, clientId = null) => {
     return socket;
   }
   
-  // Create socket instance if not already created
+  // Create socket instance if not already created (README: optional query.clientId for reconnection)
   if (!socket) {
-    createClientSocket();
+    const storedClientId = clientId || sessionStorage.getItem('clientId');
+    createClientSocket(storedClientId || undefined);
   } else if (socket.connected) {
     // If already connected, disconnect first to reset state
     socket.disconnect();
@@ -448,13 +475,12 @@ export const initClientSocket = (name, number, police, clientId = null) => {
     number
   };
 
+  // README API: client-connect { name (required), number?, userId?, departmentId?, metadata? }
   pendingConnectPayload = {
-    userId: storedClientId || undefined,
     name,
     number,
-    metadata: {
-      police
-    }
+    ...(storedClientId && { userId: storedClientId }),
+    ...(police !== undefined && police !== null && { metadata: { police } })
   };
 
   console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and userId: ${storedClientId || 'null'}`);
@@ -481,9 +507,9 @@ export const reconnectClientSocket = () => {
   
   // If we have stored credentials, reconnect
   if (name && number && police && clientId) {
-    // Create socket instance if not already created
+    // Create socket instance if not already created (README: query.clientId for reconnection)
     if (!socket) {
-      createClientSocket();
+      createClientSocket(clientId);
     }
     
     // Set authentication data with stored credentials
@@ -581,7 +607,7 @@ export const sendClientMessage = (text, roomId) => {
   };
   
   // Just emit the message to server - no temporary message creation
-  socket.emit('send-message', messageData);
+  socket.emit('send_message', messageData);
 };
 
 // Send typing indicator event to the server
@@ -620,7 +646,12 @@ export const sendClientEndChat = (clientData) => {
       console.error('Cannot end chat: room ID missing.');
       return;
     }
-    socket.emit('end-chat', { roomId: clientData.roomId });
+    const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
+    socket.emit('end_chat', { 
+      roomId: clientData.roomId,
+      userId: clientId,
+      userType: 'client'
+    });
     // Note: We don't disconnect here anymore as we need to wait for feedback submission
   }
 };

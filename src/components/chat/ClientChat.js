@@ -38,6 +38,7 @@ function ClientChat() {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackScore, setFeedbackScore] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState('');
+  const [operatorDisconnectedMessage, setOperatorDisconnectedMessage] = useState(null);
   
   // Get client info from session storage
   const clientName = sessionStorage.getItem('clientName');
@@ -147,9 +148,17 @@ function ClientChat() {
       if (sessionData.operator) {
         setHasOperator(true);
         setOperatorInfo(sessionData.operator);
+        setOperatorDisconnectedMessage(null);
       } else if ('operator' in sessionData) {
         setHasOperator(false);
         setOperatorInfo(null);
+      }
+
+      // README: operator-disconnected-temporarily / operator-disconnected-permanently
+      if (sessionData.operatorDisconnected === 'temporarily') {
+        setOperatorDisconnectedMessage(sessionData.message || 'ოპერატორი დროებით გათიშულია.');
+      } else if (sessionData.operatorDisconnected === 'permanently') {
+        setOperatorDisconnectedMessage(sessionData.message || 'ოპერატორი გათიშულია.');
       }
       
       // Update room ID if available
@@ -387,7 +396,8 @@ function ClientChat() {
             </h2>
             <p className="text-sm text-primary-100">
               {!isConnected && <span className="text-red-200">⚠️ ხელახლა დაკავშირება...</span>}
-              {isConnected && (hasOperator 
+              {operatorDisconnectedMessage && <span className="text-yellow-200">⚠️ {operatorDisconnectedMessage}</span>}
+              {isConnected && !operatorDisconnectedMessage && (hasOperator 
                 ? 'თქვენ დაკავშირებული ხართ ოპერატორთან'
                 : 'თქვენ ხართ რიგში')}
             </p>
