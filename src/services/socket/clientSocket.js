@@ -274,6 +274,29 @@ export const createClientSocket = () => {
       }
     });
 
+    // Server sends this on reconnect (e.g. after page refresh) with full session state
+    socket.on('session-reconnect', (data) => {
+      console.log('Client session-reconnect received:', data);
+
+      clientStorage.updateFromSession(data);
+      if (data?.client?.id) {
+        sessionStorage.setItem('clientId', data.client.id);
+        lastReconnectPayload = { clientId: data.client.id };
+      }
+      if (data?.client?.name) sessionStorage.setItem('clientName', data.client.name);
+      if (data?.client?.number) sessionStorage.setItem('clientNumber', data.client.number);
+
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({
+          client: data.client,
+          operator: data.operator || null,
+          roomId: data.roomId || null,
+          hasOperator: data.hasOperator ?? Boolean(data.operator),
+          messages: data.messages || []
+        });
+      }
+    });
+
     socket.on('reconnection-status', (response) => {
       console.log('Client reconnection status:', response);
 

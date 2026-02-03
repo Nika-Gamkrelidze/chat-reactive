@@ -86,24 +86,33 @@ function ClientChat() {
       setMessages(prevMessages => {
         const messagesToAdd = Array.isArray(message) ? message : [message];
         
-        // Create a map of existing messages using messageId as key
-        const existingMessages = new Map(
-          prevMessages.map(msg => [msg.messageId, msg])
+        // Normalize: server may send messageId or id
+        const normalizeMsg = (msg) => {
+          const messageId = msg.messageId || msg.id;
+          const isTemp = messageId && String(messageId).startsWith('temp_');
+          const hasContent = msg.text != null || messageId;
+          return { ...msg, messageId, isTemp, hasContent };
+        };
+        
+        const existingByKey = new Map(
+          prevMessages.map(m => [m.messageId || m.id || `${m.timestamp}_${m.text}`, m])
         );
         
-        // Only add messages that come from the server (they will have proper messageId format)
         messagesToAdd.forEach(msg => {
-          // Only add messages with proper server-generated messageId (not temp ids)
-          if (msg.messageId && !msg.messageId.startsWith('temp_')) {
-            existingMessages.set(msg.messageId, {
-              ...msg,
-              sender: msg.sentByOperator ? 'operator' : 'client'
-            });
-          }
+          const { messageId, isTemp, hasContent } = normalizeMsg(msg);
+          if (!hasContent) return;
+          // Skip only explicitly temporary (client-side) ids; accept server id or messageId
+          if (isTemp) return;
+          const key = messageId || `${msg.timestamp}_${msg.text}`;
+          existingByKey.set(key, {
+            ...msg,
+            messageId: messageId || key,
+            sender: msg.sentByOperator ? 'operator' : 'client'
+          });
         });
         
-        return Array.from(existingMessages.values())
-          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        return Array.from(existingByKey.values())
+          .sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
       });
     };
     
