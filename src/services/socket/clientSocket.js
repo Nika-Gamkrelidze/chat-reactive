@@ -222,16 +222,55 @@ export const createClientSocket = (clientIdForQuery = null) => {
         : null;
 
       const roomId = response?.data?.roomId || null;
-      const clientId = response?.data?.clientId || authClientId || socket.id || null;
+      
+      // Backend doesn't send clientId in response, so we need to extract it from other sources
+      // Priority: response data > socket.auth > sessionStorage > socket.id
+      // Note: socket.id should be available after connection, but may not match backend's clientId
+      // For new connections, we'll use socket.id as fallback until we get the real clientId
+      let clientId = response?.data?.clientId || authClientId;
+      
+      // If we still don't have a clientId and socket is connected, use socket.id
+      // This ensures we always have a clientId for the session
+      // The backend generates its own clientId, but we use socket.id temporarily
+      if (!clientId && socket.id) {
+        clientId = socket.id;
+      }
 
+      // Always store clientId if we have one (even if it's socket.id as fallback)
       if (clientId) {
         sessionStorage.setItem('clientId', clientId);
-        lastReconnectPayload = { clientId };
+        // Don't set lastReconnectPayload here - the backend doesn't send clientId in connection-status
+        // We'll set it when we get a real clientId from session or session-reconnect events
+        // This prevents reconnection attempts with socket.id which the backend doesn't recognize
       }
+      
       if (authName) sessionStorage.setItem('clientName', authName);
       if (authNumber) sessionStorage.setItem('clientNumber', authNumber);
 
-      const client = clientId ? { id: clientId, name: authName, number: authNumber } : null;
+      // Create client object - ensure we create it if we have name/number
+      // Use socket.id as fallback clientId if we don't have one yet
+      // This ensures the session handler always receives a client object for queued/connected status
+      // The backend generates its own clientId, but we use socket.id temporarily until we get it
+      const finalClientId = clientId || socket.id;
+      
+      // Always create client object if we have name (required for login)
+      // This ensures queued/connected status always has a client object
+      const client = (finalClientId && authName) ? { 
+        id: finalClientId, 
+        name: authName, 
+        number: authNumber || null
+      } : null;
+      
+      // Log for debugging
+      if (!client && (response.status === 'queued' || response.status === 'connected')) {
+        console.warn('Connection-status received but could not create client object:', {
+          finalClientId,
+          authName,
+          authNumber,
+          socketId: socket.id,
+          socketAuth: socket.auth
+        });
+      }
 
       clientStorage.updateFromSession({
         client,
@@ -412,9 +451,39 @@ export const createClientSocket = (clientIdForQuery = null) => {
       }
     });
 
+    // Learn real clientId from incoming messages (backend doesn't send it in connection-status)
+    // - In "message" event we are the receiver → use receiverId
+    // - In "message-response" we are the sender → use senderId
+    const maybeUpdateClientIdFromMessage = (payload, useSenderId = false) => {
+      if (!socket || !socket.id) return;
+      const currentId = sessionStorage.getItem('clientId');
+      if (currentId && currentId !== socket.id) return; // already have a non-socket.id clientId
+      const id = useSenderId ? payload?.senderId : payload?.receiverId;
+      if (!id) return;
+      sessionStorage.setItem('clientId', id);
+      const name = sessionStorage.getItem('clientName');
+      const number = sessionStorage.getItem('clientNumber');
+      if (name) {
+        clientStorage.updateFromSession({
+          client: { id, name, number },
+          operator: clientStorage.operator,
+          roomId: clientStorage.roomId
+        });
+      }
+      console.log('[clientSocket] Updated clientId from message:', id);
+    };
+
     // Handle incoming messages
     socket.on('message', (data) => {
       console.log('Client received message:', data);
+      
+      // Learn real clientId from first message (receiverId is us when we receive)
+      if (Array.isArray(data) && data.length > 0) {
+        maybeUpdateClientIdFromMessage(data[0]);
+      } else if (data && typeof data === 'object' && !Array.isArray(data)) {
+        if (data.receiverId) maybeUpdateClientIdFromMessage(data);
+        else if (data.messages?.[0]) maybeUpdateClientIdFromMessage(data.messages[0]);
+      }
       
       // Skip if no message handler
       if (!messageHandler || typeof messageHandler !== 'function') return;
@@ -434,8 +503,11 @@ export const createClientSocket = (clientIdForQuery = null) => {
     
     socket.on('message-response', (response) => {
       if (response?.status !== 'ok' || !response?.data) return;
+      // Learn real clientId from response (senderId is us when we sent the message)
+      const data = response.data;
+      maybeUpdateClientIdFromMessage(data, true);
       if (messageHandler && typeof messageHandler === 'function') {
-        messageHandler(response.data);
+        messageHandler(data);
       }
     });
 
@@ -450,11 +522,13 @@ export const createClientSocket = (clientIdForQuery = null) => {
       }
     });
 
-    socket.on('chat_ended_ack', (response) => {
+    // Backend sends: end-chat-response (with hyphen)
+    socket.on('end-chat-response', (response) => {
       console.log('Client end-chat response:', response);
     });
 
-    socket.on('chat_ended', (data) => {
+    // Backend sends: chat-ended (with hyphen)
+    socket.on('chat-ended', (data) => {
       console.log('Chat ended:', data);
       if (sessionHandler && typeof sessionHandler === 'function') {
         sessionHandler({ chatEnded: true, ...data });
@@ -469,10 +543,11 @@ export const createClientSocket = (clientIdForQuery = null) => {
       }
     });
 
-    socket.on('feedback_submitted', (response) => {
-      console.log('Feedback submitted:', response);
+    // Backend sends: feedback-received (with hyphen)
+    socket.on('feedback-received', (response) => {
+      console.log('Feedback received:', response);
       if (sessionHandler && typeof sessionHandler === 'function') {
-        sessionHandler({ feedbackProcessed: true, success: response?.success === true });
+        sessionHandler({ feedbackProcessed: true, success: response?.status === 'ok' });
       }
       // Cleanup is handled by ClientChat to also clear AuthContext's sessionStorage.user
     });
@@ -505,6 +580,13 @@ export const initClientSocket = (name, number, police, clientId = null) => {
   
   // Store user credentials including police
   clientStorage.storeUserCredentials(name, number, police);
+  
+  // Also store in sessionStorage immediately so connection-status handler can access them
+  sessionStorage.setItem('clientName', name);
+  sessionStorage.setItem('clientNumber', number);
+  if (police !== undefined && police !== null) {
+    sessionStorage.setItem('clientPolice', police);
+  }
 
   const storedClientId = clientId || sessionStorage.getItem('clientId');
 
@@ -583,6 +665,15 @@ export const requestClientReconnect = (clientId) => {
   if (socket && socket.connected) {
     const storedClientId = clientId || sessionStorage.getItem('clientId');
     if (!storedClientId) return false;
+    
+    // Don't reconnect if clientId is socket.id - backend doesn't recognize it
+    // Only reconnect with clientIds we got from backend (session/session-reconnect events)
+    // Socket.id is a temporary fallback and shouldn't be used for reconnection
+    if (storedClientId === socket.id) {
+      console.warn('Cannot reconnect with socket.id - backend requires valid clientId from session');
+      return false;
+    }
+    
     lastReconnectPayload = { clientId: storedClientId };
     socket.emit('client-reconnect', { clientId: storedClientId });
     return true;
@@ -648,7 +739,8 @@ export const sendClientMessage = (text, roomId) => {
   };
   
   // Just emit the message to server - no temporary message creation
-  socket.emit('send_message', messageData);
+  // Backend expects: send-message (with hyphen)
+  socket.emit('send-message', messageData);
 };
 
 // Send typing indicator event to the server
@@ -688,10 +780,9 @@ export const sendClientEndChat = (clientData) => {
       return;
     }
     const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
-    socket.emit('end_chat', { 
-      roomId: clientData.roomId,
-      userId: clientId,
-      userType: 'client'
+    // Backend expects: end-chat (with hyphen) and only roomId
+    socket.emit('end-chat', { 
+      roomId: clientData.roomId
     });
     // Note: We don't disconnect here anymore as we need to wait for feedback submission
   }
@@ -713,15 +804,14 @@ export const sendClientFeedback = (feedbackData) => {
     }
 
     // feedbackData should contain { score, comment }
+    // Backend expects: submit-feedback (with hyphen) and only roomId, rating, comment
     const payload = {
       roomId: currentRoomId,
-      clientId,
       rating: feedbackData.score,
       comment: feedbackData.comment
     };
 
-    // Backend event name: client_feedback
-    socket.emit('client_feedback', payload);
+    socket.emit('submit-feedback', payload);
   }
 };
 

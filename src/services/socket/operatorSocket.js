@@ -362,7 +362,9 @@ export const createOperatorSocket = () => {
     socket.on('client-connected', (data) => {
       console.log('Client connected:', data);
       
-      if (data && data.client && data.roomId && data.client.id) {
+      // roomId: backend may send roomId, room.id (adapter), or id (room.getPublicInfo() from connectUser)
+      const roomId = data?.roomId || data?.room?.id || data?.id;
+      if (data && data.client && data.client.id && roomId) {
         // Initialize clients object if needed
         if (!operatorStorage.clients) {
           operatorStorage.clients = {};
@@ -371,10 +373,10 @@ export const createOperatorSocket = () => {
         const clientId = data.client.id;
         const currentRoomStatus = data.room?.status || data.roomStatus || 'active';
 
-        // Add or update client in clients storage
+        // Add or update client in clients storage (always set roomId so operator can send messages)
         operatorStorage.clients[clientId] = {
           ...data.client,
-          roomId: data.roomId,
+          roomId,
           roomStatus: currentRoomStatus
         };
 
@@ -385,7 +387,7 @@ export const createOperatorSocket = () => {
           // Add new client to active clients
           operatorStorage.activeClients.push({
             ...data.client,
-            roomId: data.roomId,
+            roomId,
             roomStatus: currentRoomStatus
           });
         } else {
@@ -395,7 +397,7 @@ export const createOperatorSocket = () => {
               ? {
                   ...client,
                   ...data.client, // Update any changed client info
-                  roomId: data.roomId,
+                  roomId,
                   roomStatus: currentRoomStatus // Use the status from the event
                 }
               : client
@@ -710,7 +712,10 @@ export const createOperatorSocket = () => {
     socket.on('message-response', (response) => {
       if (response?.status !== 'ok' || !response?.data) return;
       if (messageHandler && typeof messageHandler === 'function') {
-        messageHandler(response.data);
+        const data = response.data;
+        // Dashboard buckets by clientId; for operator-sent messages receiverId is the client
+        const enhanced = { ...data, clientId: data.receiverId || data.clientId };
+        messageHandler(enhanced);
       }
     });
 
@@ -773,7 +778,31 @@ export const createOperatorSocket = () => {
     socket.on('client-disconnected-permanently', (data) => {
       console.log('Client permanently disconnected:', data);
       const clientId = data?.clientId;
+      const roomId = data?.roomId;
+
       updateClientRoomStatus(clientId, data?.roomStatus || 'paused');
+
+      // Remove client from active list and storage so they disappear from dashboard
+      if (clientId) {
+        operatorStorage.activeClients = (operatorStorage.activeClients || []).filter(
+          c => c.id !== clientId
+        );
+        if (operatorStorage.clients && operatorStorage.clients[clientId]) {
+          delete operatorStorage.clients[clientId];
+        }
+        if (operatorStorage.messages && operatorStorage.messages[clientId]) {
+          delete operatorStorage.messages[clientId];
+        }
+        operatorStorage.saveToStorage();
+
+        if (clientListHandler && typeof clientListHandler === 'function') {
+          clientListHandler([...operatorStorage.activeClients]);
+        }
+        // Clear chat view and messages if this client was selected
+        if (clientChatClosedHandler && typeof clientChatClosedHandler === 'function') {
+          clientChatClosedHandler(clientId);
+        }
+      }
     });
 
     socket.on('client-reconnected', (data) => {
@@ -782,7 +811,8 @@ export const createOperatorSocket = () => {
       updateClientRoomStatus(clientId, 'active');
     });
 
-    socket.on('chat_ended', (data) => {
+    // Backend sends chat-ended (with hyphen)
+    socket.on('chat-ended', (data) => {
       const clientId = Object.values(operatorStorage.clients || {}).find(
         client => client.roomId === data?.roomId
       )?.id;
@@ -822,16 +852,22 @@ export const initOperatorSocket = (name, number, operatorId = null) => {
   
   const storedOperatorId = operatorId || sessionStorage.getItem('operatorId');
 
+  // Backend requires both operatorId and operatorName. For new operators we have no stored id,
+  // so generate one; backend will create the operator with this id.
+  const effectiveOperatorId =
+    storedOperatorId ||
+    `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
   // Set authentication data
   socket.auth = {
-    userId: storedOperatorId || undefined,
+    userId: effectiveOperatorId,
     type: "operator",
     name,
     number
   };
 
   pendingOperatorJoinPayload = {
-    operatorId: storedOperatorId || undefined,
+    operatorId: effectiveOperatorId,
     operatorName: name,
     operatorNumber: number,
     number
@@ -869,16 +905,20 @@ export const reconnectOperatorSocket = () => {
       socket.disconnect();
     }
     
+    // Backend requires both operatorId and operatorName; generate id if missing
+    const effectiveOperatorId =
+      operatorId || `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
     // Set authentication data with stored credentials
     socket.auth = {
-      userId: operatorId || undefined,
+      userId: effectiveOperatorId,
       type: "operator",
       name,
       number
     };
 
   pendingOperatorJoinPayload = {
-    operatorId: operatorId || undefined,
+    operatorId: effectiveOperatorId,
     operatorName: name,
     operatorNumber: number,
     number
@@ -886,7 +926,7 @@ export const reconnectOperatorSocket = () => {
   lastOperatorJoinPayload = pendingOperatorJoinPayload;
   operatorJoinRetriedWithoutId = false;
 
-    console.log(`Reconnecting to socket server as operator with name: ${name}, number: ${number}, and userId: ${operatorId || 'null'}`);
+    console.log(`Reconnecting to socket server as operator with name: ${name}, number: ${number}, and userId: ${effectiveOperatorId}`);
 
     // Connect to the server
     socket.connect();
@@ -1023,7 +1063,8 @@ export const sendMessageToClient = (clientId, text, roomId) => {
   };
   
   // Just emit the message to server - no temporary message creation
-  socket.emit('send_message', messageData);
+  // Backend expects: send-message (with hyphen)
+  socket.emit('send-message', messageData);
 };
 
 // Accept client from queue

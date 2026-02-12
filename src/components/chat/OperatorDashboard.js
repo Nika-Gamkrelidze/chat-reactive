@@ -116,8 +116,12 @@ function OperatorDashboard() {
         // Initialize or get existing messages for this client
         const clientMessages = prevMessages[clientId] || [];
         
-        // Check if message already exists
-        const messageExists = clientMessages.some(msg => msg.messageId === message.messageId);
+        // Dedup: backend sometimes sends same message twice with different messageIds
+        const ts = message.timestamp ? Math.floor(new Date(message.timestamp).getTime() / 1000) : 0;
+        const messageExists = clientMessages.some(
+          msg => msg.messageId === message.messageId ||
+            (msg.text === message.text && Math.floor(new Date(msg.timestamp).getTime() / 1000) === ts && (msg.senderId === message.senderId))
+        );
         
         if (!messageExists) {
           // Add new message
@@ -263,31 +267,36 @@ function OperatorDashboard() {
       }
     };
     
-    // Define handler for client ending chat
+    // Define handler for client ending chat or disconnecting (clears chat view and removes from list)
     clientChatClosedHandlerRef.current = (closedClientId) => {
-      console.log('Handling client_ended_chat for client ID:', closedClientId);
-      // If the closed client is currently selected, clear the chat view so old messages don't linger
+      console.log('Handling chat closed / client disconnected for client ID:', closedClientId);
+      if (!closedClientId) return;
+
+      // Remove client from active list so they disappear from sidebar
+      setActiveClients(prev => prev.filter(c => c.id !== closedClientId));
+
+      // If this client is currently selected, clear the chat view and messages
       const selected = selectedClientRef.current;
       if (selected && selected.id === closedClientId) {
         setInputMessage('');
         setSelectedClient(null);
+      }
 
-        // Remove messages for this client from UI state (optional but matches expected "clear")
-        setMessages(prev => {
-          const next = { ...prev };
-          delete next[closedClientId];
-          return next;
-        });
+      // Always remove messages for this client from UI state
+      setMessages(prev => {
+        const next = { ...prev };
+        delete next[closedClientId];
+        return next;
+      });
 
-        // Also remove from operatorStorage to prevent restoring old messages on refresh
-        try {
-          if (operatorStorage.messages && operatorStorage.messages[closedClientId]) {
-            delete operatorStorage.messages[closedClientId];
-            operatorStorage.saveToStorage();
-          }
-        } catch (e) {
-          // non-fatal
+      // Also remove from operatorStorage to prevent restoring old messages on refresh
+      try {
+        if (operatorStorage.messages && operatorStorage.messages[closedClientId]) {
+          delete operatorStorage.messages[closedClientId];
+          operatorStorage.saveToStorage();
         }
+      } catch (e) {
+        // non-fatal
       }
     };
     
@@ -383,25 +392,16 @@ function OperatorDashboard() {
       return;
     }
     
-    // Get room ID from the selected client or from the messages
-    let roomId = selectedClient.roomId;
-    
-    // If roomId is not directly available in the client object, try to find it in messages
-    if (!roomId && messages[selectedClient.id] && messages[selectedClient.id].length > 0) {
-      // Get roomId from the first message for this client
-      roomId = messages[selectedClient.id][0].roomId;
-      console.log('Found room ID in messages:', roomId);
+    // Resolve roomId: storage (source of truth after client-connected), then selected client, then messages
+    let roomId =
+      (operatorStorage.clients && operatorStorage.clients[selectedClient.id]?.roomId) ||
+      selectedClient.roomId ||
+      (messages[selectedClient.id]?.[0]?.roomId);
+    if (roomId && !selectedClient.roomId) {
+      setActiveClients(prev => prev.map(c => (c.id === selectedClient.id ? { ...c, roomId } : c)));
     }
-    
-    // If still no roomId, try to get it from operatorStorage
-    if (!roomId && operatorStorage.clients && operatorStorage.clients[selectedClient.id]) {
-      roomId = operatorStorage.clients[selectedClient.id].roomId;
-      console.log('Found room ID in operator storage:', roomId);
-    }
-    
     if (!roomId) {
       console.error('Cannot send message: room ID not available for client', selectedClient.id);
-      // Show error to user
       alert('Cannot send message: connection issue. Please try again later.');
       return;
     }
@@ -473,12 +473,9 @@ function OperatorDashboard() {
     
     const socket = getOperatorSocket();
     if (socket && socket.connected) {
-      // Send end_chat event
-      const operatorId = operatorStorage.operatorId || sessionStorage.getItem('operatorId');
-      socket.emit('end_chat', {
+      // Backend expects: end-chat (with hyphen), payload: roomId (required), reason (optional)
+      socket.emit('end-chat', {
         roomId,
-        userId: operatorId,
-        userType: 'operator',
         reason: 'completed'
       });
       

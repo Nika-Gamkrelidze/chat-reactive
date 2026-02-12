@@ -35,6 +35,65 @@ function ClientLogin() {
           return;
         }
 
+        // Handle queued and connected statuses - client should be able to login
+        // Backend doesn't send clientId in connection-status, so we get it from sessionData.client
+        // which is created by the connection-status handler using socket.id or stored values
+        if (sessionData.status === 'queued' || sessionData.status === 'connected') {
+          // Get clientId from the client object created by connection-status handler
+          // The connection-status handler creates a client object using socket.id if needed
+          const clientId = sessionData.client?.id || sessionStorage.getItem('clientId');
+
+          // For queued/connected status, we should have a client object or clientId
+          // If we have a client object, proceed with login
+          if (sessionData.client && sessionData.client.id) {
+            sessionStorage.setItem('clientId', sessionData.client.id);
+            sessionStorage.setItem('clientName', loginName);
+            sessionStorage.setItem('clientNumber', loginNumber);
+            sessionStorage.setItem('clientPolice', loginPolice);
+
+            login({
+              id: sessionData.client.id,
+              name: loginName,
+              number: loginNumber,
+              police: loginPolice,
+              role: 'client'
+            });
+
+            console.log('Session received, setting state to navigate to chat...');
+            setSessionReceived(true);
+            setIsLoading(false);
+            return;
+          } else if (clientId) {
+            // Fallback: if we have clientId from storage but no client object
+            sessionStorage.setItem('clientId', clientId);
+            sessionStorage.setItem('clientName', loginName);
+            sessionStorage.setItem('clientNumber', loginNumber);
+            sessionStorage.setItem('clientPolice', loginPolice);
+
+            login({
+              id: clientId,
+              name: loginName,
+              number: loginNumber,
+              police: loginPolice,
+              role: 'client'
+            });
+
+            console.log('Session received (using stored clientId), setting state to navigate to chat...');
+            setSessionReceived(true);
+            setIsLoading(false);
+            return;
+          } else {
+            // If we don't have clientId yet, this might be a timing issue
+            // The connection-status handler should create a client object using socket.id
+            // Wait for the next update - don't fail yet
+            console.warn('Client ID not available yet in queued/connected status, waiting...');
+            console.warn('Session data:', sessionData);
+            // Don't set error or stop loading - wait for proper client data
+            return;
+          }
+        }
+
+        // Fallback: check if client object exists (for backward compatibility with session event)
         if (sessionData.client) {
           sessionStorage.setItem('clientId', sessionData.client.id);
           sessionStorage.setItem('clientName', loginName);
@@ -51,15 +110,14 @@ function ClientLogin() {
 
           console.log('Session received, setting state to navigate to chat...');
           setSessionReceived(true);
-        } else {
-          console.error('Session received but client data is missing or invalid.');
-          setError('Login failed: Invalid session data received.');
           setIsLoading(false);
-          sessionStorage.removeItem('clientId');
-          sessionStorage.removeItem('clientName');
-          sessionStorage.removeItem('clientNumber');
-          sessionStorage.removeItem('clientPolice');
-          sessionStorage.removeItem('user');
+        } else {
+          // Only show error if we're not in a transitional state
+          // Sometimes connection-status fires multiple times during connection
+          console.warn('Session received but client data is missing or invalid.');
+          console.warn('Session data:', sessionData);
+          // Don't set error immediately - wait for proper session data
+          // setIsLoading(false); // Keep loading until we get proper client data
         }
       });
       

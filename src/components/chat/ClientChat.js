@@ -95,15 +95,25 @@ function ClientChat() {
           return { ...msg, messageId, isTemp, hasContent };
         };
         
+        // Dedup key: backend sometimes sends same message twice with different messageIds; treat as one by (timestamp, text, sender)
+        const contentKey = (m) => {
+          const t = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+          const ts = Math.floor(t / 1000);
+          return `${ts}_${(m.text || '')}_${Boolean(m.sentByOperator)}`;
+        };
+        
         const existingByKey = new Map(
-          prevMessages.map(m => [m.messageId || m.id || `${m.timestamp}_${m.text}`, m])
+          prevMessages.map(m => [m.messageId || m.id || contentKey(m), m])
         );
+        const existingContentKeys = new Set(prevMessages.map(m => contentKey(m)));
         
         messagesToAdd.forEach(msg => {
           const { messageId, isTemp, hasContent } = normalizeMsg(msg);
           if (!hasContent) return;
-          // Skip only explicitly temporary (client-side) ids; accept server id or messageId
           if (isTemp) return;
+          const cKey = contentKey(msg);
+          if (existingContentKeys.has(cKey)) return; // duplicate from backend (same content, different messageId)
+          existingContentKeys.add(cKey);
           const key = messageId || `${msg.timestamp}_${msg.text}`;
           existingByKey.set(key, {
             ...msg,
@@ -225,7 +235,12 @@ function ClientChat() {
       setIsLoading(false);
       setIsConnected(true);
       
-      requestClientReconnect(clientId);
+      // Don't call requestClientReconnect on fresh login - session is already established
+      // Only reconnect on page refresh when we need to restore the session
+      // The backend doesn't recognize socket.id as a valid clientId, so reconnecting
+      // with it causes requiresNewSession: true
+      // If we need to reconnect, it should happen automatically via the socket's
+      // reconnection logic or when the backend sends session-reconnect event
     }
     
     // Get current socket instance
