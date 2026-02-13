@@ -1,0 +1,12 @@
+# Use when Apache DocumentRoot is the BUILD folder: /var/www/html/chatdemo/build
+# (This file is copied into build/ by npm run build.)
+# SPA fallback: non-file routes -> index.html for React Router
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>

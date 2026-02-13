@@ -1,0 +1,21 @@
+# Apache DocumentRoot = /var/www/html/chatdemo (repo root)
+# Routes all requests into build/: static files from build/, SPA routes -> build/index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Serve real files and directories from build/
+  RewriteCond %{DOCUMENT_ROOT}/build%{REQUEST_URI} -f [OR]
+  RewriteCond %{DOCUMENT_ROOT}/build%{REQUEST_URI} -d
+  RewriteRule ^(.*)$ build/$1 [L]
+
+  # SPA fallback: all other requests -> build/index.html (React Router)
+  RewriteRule ^ build/index.html [L]
+</IfModule>
+
+# Optional: force HTTPS (uncomment if you want to redirect 80 -> 443)
+# <IfModule mod_rewrite.c>
+#   RewriteCond %{HTTPS} off
+#   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# </IfModule>
