@@ -11,14 +11,9 @@ import {
   sendClientEndChat,
   sendClientFeedback,
   cleanupClientSocket,
-  isSocketConnected,
-  requestClientReconnect
+  isSocketConnected
 } from '../../services/socket/clientSocket';
-import { MdCallEnd } from 'react-icons/md';
 import { IoMdExit } from 'react-icons/io';
-import { BiExit } from 'react-icons/bi';
-import { RiCloseLine } from 'react-icons/ri';
-import { FiPhoneOff } from 'react-icons/fi';
 
 function ClientChat() {
   const [messages, setMessages] = useState([]);
@@ -34,7 +29,6 @@ function ClientChat() {
   const socketInitializedRef = useRef(false);
   const navigate = useNavigate();
   const [roomId, setRoomId] = useState(null);
-  const [clientInfo, setClientInfo] = useState(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackScore, setFeedbackScore] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState('');
@@ -396,10 +390,6 @@ function ClientChat() {
     // Cleanup and navigation are handled in handleSessionUpdate after feedback-received
   };
 
-  const handleShowFeedbackModal = () => {  
-    setShowFeedbackModal(true);
-  };
-  
   // Log operatorTyping state during render
   console.log('[ClientChat] Rendering - operatorTyping:', operatorTyping);
   

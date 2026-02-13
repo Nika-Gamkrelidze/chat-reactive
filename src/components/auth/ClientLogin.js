@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { initClientSocket, setClientSessionHandler, isSocketConnected } from '../../services/socket/clientSocket';
+import { initClientSocket, setClientSessionHandler } from '../../services/socket/clientSocket';
 
 function ClientLogin() {
   const [name, setName] = useState('');

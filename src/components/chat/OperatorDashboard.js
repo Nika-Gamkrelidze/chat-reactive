@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
-  initOperatorSocket,
   reconnectOperatorSocket,
   sendMessageToClient, 
   requestClientQueue,
@@ -14,7 +13,6 @@ import {
   disconnectOperatorSocket,
   operatorStorage,
   getOperatorSocket,
-  acceptClient,
   setClientChatClosedHandler,
   sendOperatorTypingEvent,
   setTypingHandler
@@ -23,7 +21,7 @@ import ClientInfoSidebar from './ClientInfoSidebar';
 
 function OperatorDashboard() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   
   // State for managing dashboard data
   const [activeClients, setActiveClients] = useState([]);
@@ -33,7 +31,7 @@ function OperatorDashboard() {
   const [inputMessage, setInputMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [reconnectAttempts] = useState(0);
   const [operatorStatus, setOperatorStatus] = useState('active');
   
   // State to track client typing status { clientId: timeoutId | null }
@@ -50,6 +48,11 @@ function OperatorDashboard() {
   const typingTimeoutRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const selectedClientRef = useRef(null);
+  const messagesRef = useRef(messages);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     selectedClientRef.current = selectedClient;
@@ -203,7 +206,7 @@ function OperatorDashboard() {
       }
       
       let clientsToSet = [];
-      let messagesToSet = messages; // Start with existing messages
+      let messagesToSet = messagesRef.current; // Use ref so handler has latest without effect re-running
 
       // Handle active rooms first as they contain specific status and messages
       if (sessionData.activeRooms && Array.isArray(sessionData.activeRooms)) {
@@ -358,6 +361,9 @@ function OperatorDashboard() {
       setClientChatClosedHandler(null);
       setTypingHandler(null);
     };
+    // Intentionally run only on mount (and navigate): do NOT depend on messages or other state
+    // or we would call reconnectOperatorSocket() repeatedly and spawn new sockets / operator-join loops.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
   
   // Handle client selection
@@ -377,11 +383,6 @@ function OperatorDashboard() {
       console.log('Requesting messages for client:', client.id);
       // You might want to add a function to request messages for a specific client
     }
-  };
-  
-  // Handle accepting a client from the queue
-  const handleAcceptClient = (clientId) => {
-    acceptClient(clientId);
   };
   
   // Handle sending a message

@@ -778,7 +778,6 @@ export const createOperatorSocket = () => {
     socket.on('client-disconnected-permanently', (data) => {
       console.log('Client permanently disconnected:', data);
       const clientId = data?.clientId;
-      const roomId = data?.roomId;
 
       updateClientRoomStatus(clientId, data?.roomStatus || 'paused');
 
@@ -897,12 +896,13 @@ export const reconnectOperatorSocket = () => {
   
   // If we have stored credentials, reconnect
   if (name && number) {
+    // Already connected: do not disconnect/reconnect (prevents repeated operator-join and new sockets)
+    if (socket && socket.connected) {
+      return socket;
+    }
     // Create socket instance if not already created
     if (!socket) {
       createOperatorSocket();
-    } else if (socket.connected) {
-      // If already connected, disconnect first to reset state
-      socket.disconnect();
     }
     
     // Backend requires both operatorId and operatorName; generate id if missing
@@ -1068,8 +1068,8 @@ export const sendMessageToClient = (clientId, text, roomId) => {
 };
 
 // Accept client from queue
-export const acceptClient = (clientId) => {
-  console.warn('acceptClient is not supported by the current backend API.', clientId);
+export const acceptClient = () => {
+  console.warn('acceptClient is not supported by the current backend API.');
   return false;
 };
 

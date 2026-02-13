@@ -1,8 +1,8 @@
 const config = {
   server: {
-    protocol: 'http',
-    host: '127.0.0.1',
-    port: '4000', 
+    protocol: 'https',
+    host: 'nchat.communiq.ge',
+    port: '', 
     namespace: 'DEMO',
     get url() {
       return `${this.protocol}://${this.host}${this.port ? ':' + this.port : ''}`;
@@ -14,7 +14,7 @@ const config = {
   
   app: {
     name: 'Chat Application',
-    version: '1.0.0',
+    version: '3.0.0',
     debug: true
   }
 };

@@ -779,7 +779,6 @@ export const sendClientEndChat = (clientData) => {
       console.error('Cannot end chat: room ID missing.');
       return;
     }
-    const clientId = clientStorage.client?.id || sessionStorage.getItem('clientId');
     // Backend expects: end-chat (with hyphen) and only roomId
     socket.emit('end-chat', { 
       roomId: clientData.roomId
