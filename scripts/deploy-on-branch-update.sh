@@ -7,6 +7,8 @@ REPO_DIR="/var/www/html/chatdemo"
 BRANCH="demo-contact-deployment"
 LOG_FILE="/var/log/chatdemo-deploy.log"
 BUILD_DIR="$REPO_DIR"
+# User that runs Apache (so it can read build/). CentOS/RHEL: apache; Debian: www-data
+WEB_USER="${WEB_USER:-apache}"
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
@@ -53,6 +55,11 @@ if [ -f "$REPO_DIR/package.json" ]; then
   npm ci 2>&1 | tee -a "$LOG_FILE" || npm install 2>&1 | tee -a "$LOG_FILE"
   log "Building..."
   npm run build 2>&1 | tee -a "$LOG_FILE"
+  if [ -d "$REPO_DIR/build" ]; then
+    chown -R "$WEB_USER:$WEB_USER" "$REPO_DIR/build"
+    chmod -R u=rX,g=rX,o=rX "$REPO_DIR/build"
+    log "Set build/ ownership to $WEB_USER."
+  fi
   log "Deploy finished successfully."
 else
   log "ERROR: No package.json in $REPO_DIR"
