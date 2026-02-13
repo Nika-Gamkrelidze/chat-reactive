@@ -11,9 +11,9 @@
   RewriteRule ^(.*)$ build/$1 [L]
 
   # SPA fallback: all other requests -> build/index.html (React Router)
-  # Skip if already under /build/ to avoid infinite internal redirect loop
-  RewriteCond %{REQUEST_URI} !^/build/
-  RewriteRule ^ build/index.html [L]
+  # Only run once per request (env var prevents redirect loop on internal re-submit)
+  RewriteCond %{ENV:REDIRECT_SPA} !^1$
+  RewriteRule ^ build/index.html [L,E=SPA:1]
 </IfModule>
 
 # Optional: force HTTPS (uncomment if you want to redirect 80 -> 443)
