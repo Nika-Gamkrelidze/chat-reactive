@@ -473,6 +473,17 @@ export const createClientSocket = (clientIdForQuery = null) => {
       console.log('[clientSocket] Updated clientId from message:', id);
     };
 
+    // Learn roomId from message payload so client can send before operator messages (if backend sent roomId only with first message)
+    const maybeUpdateRoomIdFromMessage = (payload) => {
+      const msgRoomId = payload?.roomId || payload?.room_id;
+      if (!msgRoomId || clientStorage.roomId === msgRoomId) return;
+      clientStorage.updateFromSession({ roomId: msgRoomId });
+      if (sessionHandler && typeof sessionHandler === 'function') {
+        sessionHandler({ roomId: msgRoomId });
+      }
+      console.log('[clientSocket] Updated roomId from message:', msgRoomId);
+    };
+
     // Handle incoming messages
     socket.on('message', (data) => {
       console.log('Client received message:', data);
@@ -480,9 +491,12 @@ export const createClientSocket = (clientIdForQuery = null) => {
       // Learn real clientId from first message (receiverId is us when we receive)
       if (Array.isArray(data) && data.length > 0) {
         maybeUpdateClientIdFromMessage(data[0]);
+        maybeUpdateRoomIdFromMessage(data[0]);
       } else if (data && typeof data === 'object' && !Array.isArray(data)) {
         if (data.receiverId) maybeUpdateClientIdFromMessage(data);
         else if (data.messages?.[0]) maybeUpdateClientIdFromMessage(data.messages[0]);
+        maybeUpdateRoomIdFromMessage(data);
+        if (data.messages?.[0]) maybeUpdateRoomIdFromMessage(data.messages[0]);
       }
       
       // Skip if no message handler
@@ -506,6 +520,7 @@ export const createClientSocket = (clientIdForQuery = null) => {
       // Learn real clientId from response (senderId is us when we sent the message)
       const data = response.data;
       maybeUpdateClientIdFromMessage(data, true);
+      maybeUpdateRoomIdFromMessage(data);
       if (messageHandler && typeof messageHandler === 'function') {
         messageHandler(data);
       }

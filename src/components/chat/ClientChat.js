@@ -311,6 +311,16 @@ function ClientChat() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // Sync roomId from storage so client can send as soon as backend provides it (connection-status or first message)
+  useEffect(() => {
+    if (!roomId && isConnected) {
+      const fromStorage = clientStorage.roomId || sessionStorage.getItem('roomId');
+      if (fromStorage) {
+        setRoomId(fromStorage);
+      }
+    }
+  }, [roomId, isConnected]);
   
   // Handle sending a message
   const handleSendMessage = (e) => {
@@ -318,7 +328,8 @@ function ClientChat() {
     
     if (!inputMessage.trim() || !isConnected) return;
     
-    const currentRoomId = roomId || sessionStorage.getItem('roomId');
+    // Use all sources: state, sessionStorage, and clientStorage (backend may send roomId on connect or with first message)
+    const currentRoomId = roomId || sessionStorage.getItem('roomId') || clientStorage.roomId;
     
     if (!currentRoomId) {
       console.error('Cannot send message: room ID not available');
