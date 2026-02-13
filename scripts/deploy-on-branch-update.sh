@@ -47,8 +47,9 @@ if [ "$local_rev" = "$remote_rev" ]; then
   exit 0
 fi
 
-log "Update detected. Pulling and rebuilding..."
-git pull origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+log "Update detected. Fetching and resetting to origin/$BRANCH..."
+git fetch origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+git reset --hard "origin/$BRANCH" 2>&1 | tee -a "$LOG_FILE"
 
 # After pull, ensure .htaccess is readable by web server (in case it was recreated as root)
 fix_permissions() {
