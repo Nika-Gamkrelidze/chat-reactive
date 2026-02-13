@@ -1,8 +1,9 @@
 #!/bin/bash
 # Deploy script: if remote branch demo-contact-deployment has new commits,
-# pull and rebuild the project. Run via cron every 5 min.
+# reset to remote and rebuild. Run via cron every minute.
 
 set -e
+set -o pipefail
 REPO_DIR="/var/www/html/chatdemo"
 BRANCH="demo-contact-deployment"
 LOG_FILE="/var/log/chatdemo-deploy.log"
@@ -50,6 +51,8 @@ fi
 log "Update detected. Fetching and resetting to origin/$BRANCH..."
 git fetch origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
 git reset --hard "origin/$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+# Keep script executable after reset (git doesn't preserve execute bit)
+chmod +x "$REPO_DIR/scripts/deploy-on-branch-update.sh" 2>/dev/null || true
 
 # After pull, ensure .htaccess is readable by web server (in case it was recreated as root)
 fix_permissions() {
@@ -68,10 +71,11 @@ fix_permissions() {
 }
 
 if [ -f "$REPO_DIR/package.json" ]; then
-  log "Installing dependencies..."
-  npm ci 2>&1 | tee -a "$LOG_FILE" || npm install 2>&1 | tee -a "$LOG_FILE"
+  log "Installing dependencies (clean)..."
+  rm -rf "$REPO_DIR/node_modules" 2>/dev/null || true
+  (cd "$REPO_DIR" && (npm ci || npm install)) 2>&1 | tee -a "$LOG_FILE"
   log "Building..."
-  npm run build 2>&1 | tee -a "$LOG_FILE"
+  (cd "$REPO_DIR" && npm run build 2>&1) | tee -a "$LOG_FILE"
   fix_permissions
   log "Deploy finished successfully."
 else
