@@ -50,16 +50,28 @@ fi
 log "Update detected. Pulling and rebuilding..."
 git pull origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
 
+# After pull, ensure .htaccess is readable by web server (in case it was recreated as root)
+fix_permissions() {
+  if [ "$(id -u)" -ne 0 ]; then
+    log "WARN: Not running as root - cannot chown. Cron should run as root so build/ is readable by Apache."
+    return 0
+  fi
+  if [ -f "$REPO_DIR/.htaccess" ]; then
+    chown "$WEB_USER:$WEB_USER" "$REPO_DIR/.htaccess" 2>/dev/null || true
+  fi
+  if [ -d "$REPO_DIR/build" ]; then
+    chown -R "$WEB_USER:$WEB_USER" "$REPO_DIR/build"
+    chmod -R u=rX,g=rX,o=rX "$REPO_DIR/build"
+    log "Set build/ and .htaccess ownership to $WEB_USER."
+  fi
+}
+
 if [ -f "$REPO_DIR/package.json" ]; then
   log "Installing dependencies..."
   npm ci 2>&1 | tee -a "$LOG_FILE" || npm install 2>&1 | tee -a "$LOG_FILE"
   log "Building..."
   npm run build 2>&1 | tee -a "$LOG_FILE"
-  if [ -d "$REPO_DIR/build" ]; then
-    chown -R "$WEB_USER:$WEB_USER" "$REPO_DIR/build"
-    chmod -R u=rX,g=rX,o=rX "$REPO_DIR/build"
-    log "Set build/ ownership to $WEB_USER."
-  fi
+  fix_permissions
   log "Deploy finished successfully."
 else
   log "ERROR: No package.json in $REPO_DIR"
