@@ -1,0 +1,20 @@
+# Example Apache VirtualHost for chatdemo when using build/ as DocumentRoot.
+# This avoids any rewrite-from-repo-root and prevents "10 internal redirects" 500.
+#
+# 1. Find your existing vhost for chatdemo.communiq.ge, e.g.:
+#    /etc/httpd/conf.d/chatdemo.conf or inside /etc/httpd/conf.d/ssl.conf
+#
+# 2. Set DocumentRoot to the build directory (not the repo root):
+#
+#    DocumentRoot "/var/www/html/chatdemo/build"
+#    <Directory "/var/www/html/chatdemo/build">
+#        AllowOverride All
+#        Require all granted
+#        Options -Indexes +FollowSymLinks
+#    </Directory>
+#
+# 3. Reload Apache:
+#    systemctl reload httpd
+#
+# The file public/.htaccess is copied into build/ by "npm run build" and handles
+# SPA routing (non-file requests -> index.html). No root .htaccess is used.

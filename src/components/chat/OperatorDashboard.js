@@ -536,7 +536,7 @@ function OperatorDashboard() {
       {/* Header */}
       <header className="bg-white shadow-sm p-4 flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-semibold text-gray-800">ოპერატორის პანელი</h1>
+          <h1 className="text-xl font-semibold text-gray-800">ოპერატორის გვერდი</h1>
           <div className="text-sm text-gray-500">
             {isConnected ? (
               <span className="text-green-500 flex items-center">
