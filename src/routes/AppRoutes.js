@@ -5,7 +5,6 @@ import ClientLogin from '../components/auth/ClientLogin';
 import OperatorLogin from '../components/auth/OperatorLogin';
 import ClientChat from '../components/chat/ClientChat';
 import OperatorDashboard from '../components/chat/OperatorDashboard';
-import AdminLogs from '../components/admin/AdminLogs';
 
 function AppRoutes() {
   return (
@@ -29,8 +28,6 @@ function AppRoutes() {
           </PrivateRoute>
         } 
       />
-      <Route path="/admin" element={<Navigate to="/admin/logs" replace />} />
-      <Route path="/admin/logs" element={<AdminLogs />} />
       <Route path="/" element={<Navigate to="/operator/login" replace />} />
     </Routes>
   );
