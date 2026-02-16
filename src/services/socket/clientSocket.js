@@ -223,12 +223,8 @@ export const createClientSocket = (clientIdForQuery = null) => {
 
       const roomId = response?.data?.roomId || null;
       
-      // Prefer backend's clientId (response.data.clientId) so send-message is accepted and displayed
+      // Use backend's clientId if sent; otherwise use the userId we sent in client-connect (so send-message is accepted)
       let clientId = response?.data?.clientId || authClientId;
-      
-      // If we still don't have a clientId and socket is connected, use socket.id
-      // This ensures we always have a clientId for the session
-      // The backend generates its own clientId, but we use socket.id temporarily
       if (!clientId && socket.id) {
         clientId = socket.id;
       }
@@ -600,11 +596,16 @@ export const initClientSocket = (name, number, police, clientId = null) => {
     sessionStorage.setItem('clientPolice', police);
   }
 
-  const storedClientId = clientId || sessionStorage.getItem('clientId');
+  // Backend uses data.clientId || data.userId || generated. Send our own id so backend and frontend match (required for send-message to be accepted).
+  let storedClientId = clientId || sessionStorage.getItem('clientId');
+  if (!storedClientId) {
+    storedClientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    sessionStorage.setItem('clientId', storedClientId);
+  }
 
   // Set authentication data
   socket.auth = {
-    userId: storedClientId || undefined,
+    userId: storedClientId,
     type: 'client',
     name,
     number
@@ -614,11 +615,11 @@ export const initClientSocket = (name, number, police, clientId = null) => {
   pendingConnectPayload = {
     name,
     number,
-    ...(storedClientId && { userId: storedClientId }),
+    userId: storedClientId,
     ...(police !== undefined && police !== null && { metadata: { police } })
   };
 
-  console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and userId: ${storedClientId || 'null'}`);
+  console.log(`Connecting to socket server as client with name: ${name} and number: ${number} and userId: ${storedClientId}`);
 
   // Connect to the server
   socket.connect();
@@ -725,8 +726,7 @@ export const getClientSocket = () => {
   return socket;
 };
 
-// Send message to operator
-// roomId is optional: backend can resolve it from senderId (client) so client can send before receiving roomId
+// Send message to operator (backend requires roomId, senderId, text)
 export const sendClientMessage = (text, roomId) => {
   if (!socket || !socket.connected) {
     console.error('Cannot send message: socket not connected');
@@ -739,17 +739,16 @@ export const sendClientMessage = (text, roomId) => {
     console.error('Cannot send message: client ID not available');
     return false;
   }
-  
-  const messageData = {
-    text,
-    senderId: clientId
-  };
-  if (roomId) {
-    messageData.roomId = roomId;
+  if (!roomId) {
+    console.error('Cannot send message: room ID not provided');
+    return false;
   }
   
-  // Backend expects: send-message (with hyphen). Backend resolves roomId from client if missing.
-  socket.emit('send-message', messageData);
+  socket.emit('send-message', {
+    text,
+    roomId,
+    senderId: clientId
+  });
 };
 
 // Send typing indicator event to the server

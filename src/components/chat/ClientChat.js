@@ -328,12 +328,13 @@ function ClientChat() {
     
     if (!inputMessage.trim() || !isConnected) return;
     
-    // roomId optional: backend resolves from client so client can send before operator messages
-    const currentRoomId = roomId || sessionStorage.getItem('roomId') || clientStorage.roomId || null;
+    const currentRoomId = roomId || sessionStorage.getItem('roomId') || clientStorage.roomId;
+    if (!currentRoomId) {
+      console.error('Cannot send message: room ID not available');
+      return;
+    }
     
     sendClientMessage(inputMessage.trim(), currentRoomId);
-    
-    // Clear input
     setInputMessage('');
   };
   
