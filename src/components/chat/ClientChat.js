@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   initClientSocket, 
+  reconnectClientSocket,
   setClientMessageHandler, 
   setClientSessionHandler,
   sendClientMessage, 
@@ -239,11 +240,15 @@ function ClientChat() {
     setClientMessageHandler(handleNewMessage);
     setClientSessionHandler(handleSessionUpdate);
     
-    // Check if socket is already connected
+    // Connect: use client-reconnect when we have existing session (so backend notifies operator and marks client online again)
     if (!isSocketConnected()) {
-      // Only initialize socket if not already connected
-      console.log('Initializing client socket with:', { clientName, clientNumber, clientId });
-      initClientSocket(clientName, clientNumber, clientPolice, clientId);
+      if (clientId && clientName && clientNumber) {
+        console.log('Restoring session and reconnecting so operator receives client-reconnected:', clientId);
+        reconnectClientSocket();
+      } else {
+        console.log('Initializing client socket with:', { clientName, clientNumber, clientId });
+        initClientSocket(clientName, clientNumber, clientPolice, clientId);
+      }
     } else {
       console.log('Using existing socket connection');
       setIsLoading(false);

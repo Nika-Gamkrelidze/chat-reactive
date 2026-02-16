@@ -7,21 +7,45 @@ export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Check for existing user on mount
+  // Check for existing user on mount; restore from localStorage when session was lost (e.g. browser closed)
   useEffect(() => {
-    // Check if we have user data in session storage
     const checkExistingAuth = () => {
-      const storedUser = sessionStorage.getItem('user');
+      let storedUser = sessionStorage.getItem('user');
       
       if (storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
           setIsAuthenticated(true);
+          setIsLoading(false);
+          return;
         } catch (error) {
           console.error('Error parsing stored user:', error);
           sessionStorage.removeItem('user');
         }
+      }
+      
+      // Restore client session from localStorage so user can return to chat and operator sees client-reconnected
+      try {
+        const clientUser = localStorage.getItem('clientUser');
+        const clientSession = localStorage.getItem('clientSession');
+        const data = clientUser ? JSON.parse(clientUser) : clientSession ? JSON.parse(clientSession) : null;
+        if (data && (data.id || data.clientId) && (data.name || data.clientName) && (data.number || data.clientNumber)) {
+          const id = data.id || data.clientId;
+          const name = data.name || data.clientName;
+          const number = data.number || data.clientNumber;
+          const police = data.police || data.clientPolice || '';
+          const user = { id, name, number, police, role: 'client' };
+          sessionStorage.setItem('user', JSON.stringify(user));
+          sessionStorage.setItem('clientId', id);
+          sessionStorage.setItem('clientName', name);
+          sessionStorage.setItem('clientNumber', number);
+          sessionStorage.setItem('clientPolice', police);
+          setUser(user);
+          setIsAuthenticated(true);
+        }
+      } catch (e) {
+        console.warn('Could not restore client session from localStorage', e);
       }
       
       setIsLoading(false);
@@ -43,9 +67,7 @@ export function AuthProvider({ children }) {
     setIsAuthenticated(false);
     sessionStorage.removeItem('user');
     
-    // Clear operator/client specific data
     if (sessionStorage.getItem('operatorName')) {
-      // Use the clearAll method from operatorStorage
       const { clearOperatorData } = require('../services/socket/operatorSocket');
       clearOperatorData();
     }
@@ -54,8 +76,13 @@ export function AuthProvider({ children }) {
       sessionStorage.removeItem('clientName');
       sessionStorage.removeItem('clientNumber');
       sessionStorage.removeItem('clientId');
+      sessionStorage.removeItem('clientPolice');
       sessionStorage.removeItem('clientActiveOperator');
       sessionStorage.removeItem('clientMessages');
+      try {
+        localStorage.removeItem('clientSession');
+        localStorage.removeItem('clientUser');
+      } catch (e) {}
     }
   };
   

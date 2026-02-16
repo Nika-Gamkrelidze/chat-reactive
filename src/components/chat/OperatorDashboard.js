@@ -628,16 +628,20 @@ function OperatorDashboard() {
                         )}
                         {/* Status Indicator */}
                         <div className="flex items-center">
-                          <span className="text-xs text-gray-500 mr-1"> {/* Reduced margin */}
-                            {client.roomStatus === 'active' ? 'აქტიური' : 'დასრულებული'}
+                          <span className="text-xs text-gray-500 mr-1">
+                            {client.roomStatus === 'active'
+                              ? 'ონლაინ'
+                              : client.roomStatus === 'paused'
+                                ? 'გათიშული'
+                                : 'დასრულებული'}
                           </span>
                           <span className={`w-2 h-2 rounded-full ${
-                            client.roomStatus === 'active' // Color based on roomStatus
-                              ? 'bg-green-500' 
+                            client.roomStatus === 'active'
+                              ? 'bg-green-500'
                               : client.roomStatus === 'closed'
                                 ? 'bg-red-500'
-                                : 'bg-yellow-500' // Keep yellow for potential other statuses, e.g., paused by operator?
-                          }`}></span>
+                                : 'bg-yellow-500'
+                          }`} title={client.roomStatus === 'active' ? 'კლიენტი ონლაინია' : client.roomStatus === 'paused' ? 'კლიენტი გათიშულია' : 'დასრულებული'}></span>
                         </div>
                       </div>
                     </li>

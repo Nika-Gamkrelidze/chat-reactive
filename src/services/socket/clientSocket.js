@@ -286,16 +286,13 @@ export const createClientSocket = (clientIdForQuery = null) => {
         });
       }
 
-      // Persist session to localStorage so re-opening browser can reconnect (operator receives client-reconnected)
+      // Persist session to localStorage so re-opening browser can restore and backend can notify operator (client-reconnected)
       if (clientId && authName && authNumber) {
         try {
           const police = sessionStorage.getItem('clientPolice') || '';
-          localStorage.setItem('clientSession', JSON.stringify({
-            clientId,
-            clientName: authName,
-            clientNumber: authNumber,
-            clientPolice: police
-          }));
+          const session = { clientId, clientName: authName, clientNumber: authNumber, clientPolice: police };
+          localStorage.setItem('clientSession', JSON.stringify(session));
+          localStorage.setItem('clientUser', JSON.stringify({ id: clientId, name: authName, number: authNumber, police, role: 'client' }));
         } catch (e) {
           console.warn('Could not persist client session to localStorage', e);
         }
@@ -387,12 +384,9 @@ export const createClientSocket = (clientIdForQuery = null) => {
       const cpol = sessionStorage.getItem('clientPolice');
       if (cid && cname && cnum) {
         try {
-          localStorage.setItem('clientSession', JSON.stringify({
-            clientId: cid,
-            clientName: cname,
-            clientNumber: cnum,
-            clientPolice: cpol || ''
-          }));
+          const session = { clientId: cid, clientName: cname, clientNumber: cnum, clientPolice: cpol || '' };
+          localStorage.setItem('clientSession', JSON.stringify(session));
+          localStorage.setItem('clientUser', JSON.stringify({ id: cid, name: cname, number: cnum, police: cpol || '', role: 'client' }));
         } catch (e) {
           console.warn('Could not persist client session to localStorage', e);
         }
@@ -692,8 +686,8 @@ export const reconnectClientSocket = () => {
   
   console.log('Attempting to reconnect with stored credentials:', { clientId, name, number, police });
   
-  // If we have stored credentials, reconnect
-  if (name && number && police && clientId) {
+  // If we have stored credentials, reconnect (police optional for reconnection)
+  if (name && number && clientId) {
     // Create socket instance if not already created (README: query.clientId for reconnection)
     if (!socket) {
       createClientSocket(clientId);
@@ -885,7 +879,8 @@ export const cleanupClientSocket = () => {
   clientStorage.clear();
   try {
     localStorage.removeItem('clientSession');
+    localStorage.removeItem('clientUser');
   } catch (e) {
-    console.warn('Could not remove clientSession from localStorage', e);
+    console.warn('Could not remove client session from localStorage', e);
   }
 };
