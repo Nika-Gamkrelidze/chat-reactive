@@ -178,7 +178,7 @@ export const createClientSocket = (clientIdForQuery = null) => {
       };
     }
     
-    // Handle connection events
+    // Handle connection events (connect fires on both initial connection and Socket.IO reconnection)
     socket.on('connect', () => {
       console.log(`Client connected to server with ID: ${socket.id}`);
 
@@ -191,11 +191,17 @@ export const createClientSocket = (clientIdForQuery = null) => {
       if (pendingConnectPayload) {
         socket.emit('client-connect', pendingConnectPayload);
         pendingConnectPayload = null;
+        return;
+      }
+
+      // Socket.IO reconnection (e.g. user returned to tab): emit client-reconnect so operator receives client-reconnected
+      if (lastReconnectPayload && lastReconnectPayload.clientId) {
+        socket.emit('client-reconnect', lastReconnectPayload);
       }
     });
 
     socket.on('reconnect', () => {
-      if (lastReconnectPayload) {
+      if (lastReconnectPayload && lastReconnectPayload.clientId) {
         socket.emit('client-reconnect', lastReconnectPayload);
       }
     });
@@ -229,12 +235,10 @@ export const createClientSocket = (clientIdForQuery = null) => {
         clientId = socket.id;
       }
 
-      // Always store clientId if we have one (even if it's socket.id as fallback)
+      // Store clientId and set lastReconnectPayload so when socket fires 'reconnect' (e.g. user returns to tab) we emit client-reconnect and operator receives client-reconnected
       if (clientId) {
         sessionStorage.setItem('clientId', clientId);
-        // Don't set lastReconnectPayload here - the backend doesn't send clientId in connection-status
-        // We'll set it when we get a real clientId from session or session-reconnect events
-        // This prevents reconnection attempts with socket.id which the backend doesn't recognize
+        lastReconnectPayload = { clientId };
       }
       
       if (authName) sessionStorage.setItem('clientName', authName);
