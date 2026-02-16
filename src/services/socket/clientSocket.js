@@ -281,6 +281,21 @@ export const createClientSocket = (clientIdForQuery = null) => {
           queuePosition: response?.data?.queuePosition ?? null
         });
       }
+
+      // Persist session to localStorage so re-opening browser can reconnect (operator receives client-reconnected)
+      if (clientId && authName && authNumber) {
+        try {
+          const police = sessionStorage.getItem('clientPolice') || '';
+          localStorage.setItem('clientSession', JSON.stringify({
+            clientId,
+            clientName: authName,
+            clientNumber: authNumber,
+            clientPolice: police
+          }));
+        } catch (e) {
+          console.warn('Could not persist client session to localStorage', e);
+        }
+      }
     });
 
     // Backward compatibility: some servers still emit `session`
@@ -359,6 +374,24 @@ export const createClientSocket = (clientIdForQuery = null) => {
           roomId,
           queuePosition: response?.queuePosition ?? null
         });
+      }
+
+      // Persist session so re-opening browser can reconnect (operator receives client-reconnected)
+      const cid = clientStorage.client?.id || sessionStorage.getItem('clientId');
+      const cname = sessionStorage.getItem('clientName');
+      const cnum = sessionStorage.getItem('clientNumber');
+      const cpol = sessionStorage.getItem('clientPolice');
+      if (cid && cname && cnum) {
+        try {
+          localStorage.setItem('clientSession', JSON.stringify({
+            clientId: cid,
+            clientName: cname,
+            clientNumber: cnum,
+            clientPolice: cpol || ''
+          }));
+        } catch (e) {
+          console.warn('Could not persist client session to localStorage', e);
+        }
       }
     });
 
@@ -596,8 +629,22 @@ export const initClientSocket = (name, number, police, clientId = null) => {
     sessionStorage.setItem('clientPolice', police);
   }
 
-  // Backend uses data.clientId || data.userId || generated. Send our own id so backend and frontend match (required for send-message to be accepted).
+  // Use existing clientId when re-opening browser so backend runs handleClientReconnect and operator receives client-reconnected
   let storedClientId = clientId || sessionStorage.getItem('clientId');
+  if (!storedClientId) {
+    try {
+      const saved = localStorage.getItem('clientSession');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.clientId && parsed.clientName === name && parsed.clientNumber === number) {
+          storedClientId = parsed.clientId;
+          sessionStorage.setItem('clientId', storedClientId);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not restore client session from localStorage', e);
+    }
+  }
   if (!storedClientId) {
     storedClientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     sessionStorage.setItem('clientId', storedClientId);
@@ -825,17 +872,16 @@ export const sendClientFeedback = (feedbackData) => {
 // Add this new function
 export const cleanupClientSocket = () => {
   if (socket) {
-    // Remove all listeners
     socket.removeAllListeners();
-    // Disconnect socket
     socket.disconnect();
-    // Reset socket instance
     socket = null;
-    // Reset handlers
     messageHandler = null;
     sessionHandler = null;
   }
-  
-  // Clear storage
   clientStorage.clear();
+  try {
+    localStorage.removeItem('clientSession');
+  } catch (e) {
+    console.warn('Could not remove clientSession from localStorage', e);
+  }
 };

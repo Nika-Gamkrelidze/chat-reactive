@@ -34,11 +34,31 @@ function ClientChat() {
   const [feedbackComment, setFeedbackComment] = useState('');
   const [operatorDisconnectedMessage, setOperatorDisconnectedMessage] = useState(null);
   
-  // Get client info from session storage
-  const clientName = sessionStorage.getItem('clientName');
-  const clientNumber = sessionStorage.getItem('clientNumber');
-  const clientId = sessionStorage.getItem('clientId');
-  const clientPolice = sessionStorage.getItem('clientPolice');
+  // Get client info from session storage (restore from localStorage when re-opening browser so operator receives client-reconnected)
+  let clientName = sessionStorage.getItem('clientName');
+  let clientNumber = sessionStorage.getItem('clientNumber');
+  let clientId = sessionStorage.getItem('clientId');
+  let clientPolice = sessionStorage.getItem('clientPolice');
+  if ((!clientName || !clientNumber) && typeof localStorage !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('clientSession');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.clientId && parsed.clientName && parsed.clientNumber) {
+          sessionStorage.setItem('clientId', parsed.clientId);
+          sessionStorage.setItem('clientName', parsed.clientName);
+          sessionStorage.setItem('clientNumber', parsed.clientNumber);
+          sessionStorage.setItem('clientPolice', parsed.clientPolice || '');
+          clientName = parsed.clientName;
+          clientNumber = parsed.clientNumber;
+          clientId = parsed.clientId;
+          clientPolice = parsed.clientPolice || '';
+        }
+      }
+    } catch (e) {
+      console.warn('Could not restore client session from localStorage', e);
+    }
+  }
   
   useEffect(() => {
     // Redirect to login if no client info
