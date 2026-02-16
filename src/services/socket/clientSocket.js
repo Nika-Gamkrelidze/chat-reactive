@@ -729,6 +729,7 @@ export const getClientSocket = () => {
 };
 
 // Send message to operator
+// roomId is optional: backend can resolve it from senderId (client) so client can send before receiving roomId
 export const sendClientMessage = (text, roomId) => {
   if (!socket || !socket.connected) {
     console.error('Cannot send message: socket not connected');
@@ -742,19 +743,15 @@ export const sendClientMessage = (text, roomId) => {
     return false;
   }
   
-  if (!roomId) {
-    console.error('Cannot send message: room ID not provided');
-    return false;
-  }
-  
   const messageData = {
     text,
-    roomId,
     senderId: clientId
   };
+  if (roomId) {
+    messageData.roomId = roomId;
+  }
   
-  // Just emit the message to server - no temporary message creation
-  // Backend expects: send-message (with hyphen)
+  // Backend expects: send-message (with hyphen). Backend resolves roomId from client if missing.
   socket.emit('send-message', messageData);
 };
 

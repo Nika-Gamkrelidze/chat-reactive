@@ -328,17 +328,9 @@ function ClientChat() {
     
     if (!inputMessage.trim() || !isConnected) return;
     
-    // Use all sources: state, sessionStorage, and clientStorage (backend may send roomId on connect or with first message)
-    const currentRoomId = roomId || sessionStorage.getItem('roomId') || clientStorage.roomId;
+    // roomId optional: backend resolves from client so client can send before operator messages
+    const currentRoomId = roomId || sessionStorage.getItem('roomId') || clientStorage.roomId || null;
     
-    if (!currentRoomId) {
-      console.error('Cannot send message: room ID not available');
-      return;
-    }
-    
-    console.log('Sending message with room ID:', currentRoomId);
-    
-    // Just send the message - no temporary message creation
     sendClientMessage(inputMessage.trim(), currentRoomId);
     
     // Clear input
