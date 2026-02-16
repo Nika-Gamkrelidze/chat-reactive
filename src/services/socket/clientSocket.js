@@ -223,10 +223,7 @@ export const createClientSocket = (clientIdForQuery = null) => {
 
       const roomId = response?.data?.roomId || null;
       
-      // Backend doesn't send clientId in response, so we need to extract it from other sources
-      // Priority: response data > socket.auth > sessionStorage > socket.id
-      // Note: socket.id should be available after connection, but may not match backend's clientId
-      // For new connections, we'll use socket.id as fallback until we get the real clientId
+      // Prefer backend's clientId (response.data.clientId) so send-message is accepted and displayed
       let clientId = response?.data?.clientId || authClientId;
       
       // If we still don't have a clientId and socket is connected, use socket.id
