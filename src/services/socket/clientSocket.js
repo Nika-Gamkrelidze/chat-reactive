@@ -10,6 +10,8 @@ const DEBUG_SOCKET = true;
 let pendingConnectPayload = null;
 let pendingReconnectPayload = null;
 let lastReconnectPayload = null;
+let visibilityReconnectListener = null;
+let hadDisconnect = false;
 
 // Chat storage to maintain state across the application
 export const clientStorage = {
@@ -178,6 +180,17 @@ export const createClientSocket = (clientIdForQuery = null) => {
       };
     }
     
+    // Emit client-reconnect so backend notifies operator (client-reconnected). Call this whenever client "returns" to the page.
+    const emitClientReconnectIfNeeded = () => {
+      const cid = lastReconnectPayload?.clientId || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('clientId') : null);
+      if (socket && socket.connected && cid) {
+        console.log('[clientSocket] Emitting client-reconnect so operator receives client-reconnected:', cid);
+        socket.emit('client-reconnect', { clientId: cid });
+        if (!lastReconnectPayload) lastReconnectPayload = { clientId: cid };
+        hadDisconnect = false;
+      }
+    };
+
     // Handle connection events (connect fires on both initial connection and Socket.IO reconnection)
     socket.on('connect', () => {
       console.log(`Client connected to server with ID: ${socket.id}`);
@@ -195,19 +208,30 @@ export const createClientSocket = (clientIdForQuery = null) => {
       }
 
       // Socket.IO reconnection (e.g. user returned to tab): emit client-reconnect so operator receives client-reconnected
-      if (lastReconnectPayload && lastReconnectPayload.clientId) {
-        socket.emit('client-reconnect', lastReconnectPayload);
-      }
+      emitClientReconnectIfNeeded();
     });
 
     socket.on('reconnect', () => {
-      if (lastReconnectPayload && lastReconnectPayload.clientId) {
-        socket.emit('client-reconnect', lastReconnectPayload);
-      }
+      emitClientReconnectIfNeeded();
     });
-    
+
+    // When user returns to tab (visibility change), emit client-reconnect so operator sees client back (handles mobile/tab switch)
+    if (typeof document !== 'undefined' && document.addEventListener) {
+      if (visibilityReconnectListener) {
+        document.removeEventListener('visibilitychange', visibilityReconnectListener);
+      }
+      visibilityReconnectListener = () => {
+        if (document.visibilityState === 'visible' && socket && socket.connected && hadDisconnect) {
+          emitClientReconnectIfNeeded();
+          hadDisconnect = false;
+        }
+      };
+      document.addEventListener('visibilitychange', visibilityReconnectListener);
+    }
+
     socket.on('disconnect', (reason) => {
       console.log(`Client disconnected from server: ${reason}`);
+      hadDisconnect = true;
     });
     
     socket.on('connect_error', (error) => {
@@ -877,6 +901,10 @@ export const cleanupClientSocket = () => {
     sessionHandler = null;
   }
   clientStorage.clear();
+  if (visibilityReconnectListener && typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', visibilityReconnectListener);
+    visibilityReconnectListener = null;
+  }
   try {
     localStorage.removeItem('clientSession');
     localStorage.removeItem('clientUser');
